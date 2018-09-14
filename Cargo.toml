@@ -1,0 +1,23 @@
+[package]
+name = "riboprof-tools"
+version = "0.1.0"
+authors = ["Nicholas Ingolia <ingolia@berkeley.edu>"]
+
+[dependencies]
+bio = "*"
+rust-htslib = "*"
+itertools = "*"
+csv = "*"
+failure = "*"
+clap = "*"
+
+[profile.dev]
+opt-level = 3
+
+[lib]
+name = "riboprof"
+path = "src/riboprof/lib.rs"
+
+[[bin]]
+name = "fastx-split"
+path = "src/fastx-split/main.rs"
