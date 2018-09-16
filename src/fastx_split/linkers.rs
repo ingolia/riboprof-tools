@@ -3,6 +3,8 @@ use std::fmt;
 
 use failure;
 
+use bio::io::fastq;
+
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
 enum LinkerNtSpec {
     UMI,
@@ -42,8 +44,10 @@ impl LinkerSpec {
         Ok( LinkerSpec { prefix: prefix?, suffix: suffix? } )
     }
 
+    #[allow(dead_code)]
     pub fn prefix_length(&self) -> usize { self.prefix.len() }
     
+    #[allow(dead_code)]
     pub fn suffix_length(&self) -> usize { self.suffix.len() }
 
     pub fn linker_length(&self) -> usize { self.prefix.len() + self.suffix.len() }
@@ -56,7 +60,9 @@ impl LinkerSpec {
             .count()
     }
 
-    pub fn split_seq<'a>(&self, sequence: &'a [u8]) -> Option<LinkerSplit<'a>> {
+    pub fn split_record<'a>(&self, fq: &'a fastq::Record) -> Option<LinkerSplit<'a>> {
+        let sequence = fq.seq();
+
         if sequence.len() >= self.prefix.len() + self.suffix.len() {
             let mut umi = Vec::new();
             let mut sample_index = Vec::new();
@@ -72,13 +78,14 @@ impl LinkerSpec {
             for i in 0..self.suffix.len() {
                 match self.suffix[i] {
                     LinkerNtSpec::UMI => umi.push(sequence[suffix_start + i]),
-                    LinkerNtSpec::SampleIndex => umi.push(sequence[suffix_start + i]),
+                    LinkerNtSpec::SampleIndex => sample_index.push(sequence[suffix_start + i]),
                 };
             }
 
             Some( LinkerSplit { umi: umi, 
                                 sample_index: sample_index,
-                                sequence: &sequence[self.prefix.len()..suffix_start] } )
+                                sequence: &sequence[self.prefix.len()..suffix_start],
+                                quality: &fq.qual()[self.prefix.len()..suffix_start] } )
         } else {
             None
         }
@@ -104,6 +111,7 @@ pub struct LinkerSplit<'a> {
     umi: Vec<u8>,
     sample_index: Vec<u8>,
     sequence: &'a [u8],
+    quality: &'a [u8],
 }
 
 impl<'a> LinkerSplit<'a> {
@@ -117,6 +125,10 @@ impl<'a> LinkerSplit<'a> {
 
     pub fn sequence(&self) -> &'a [u8] {
         self.sequence
+    }
+
+    pub fn quality(&self) -> &'a [u8] {
+        self.quality
     }
 }
 

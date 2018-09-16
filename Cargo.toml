@@ -20,4 +20,4 @@ path = "src/riboprof/lib.rs"
 
 [[bin]]
 name = "fastx-split"
-path = "src/fastx-split/main.rs"
+path = "src/fastx_split/main.rs"

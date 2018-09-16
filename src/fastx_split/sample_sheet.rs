@@ -58,7 +58,8 @@ impl <T> SampleMap<T> {
         Ok( () )
     }
 
-    pub fn get(&self, index: &[u8]) -> Result<Option<(&T)>, failure::Error> {
+    #[allow(dead_code)]
+    pub fn get(&self, index: &[u8]) -> Result<Option<&T>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
@@ -68,6 +69,17 @@ impl <T> SampleMap<T> {
         Ok( entry.map(|entry| &self.sample_thing[*entry]) )
     }
 
+    pub fn get_mut(&mut self, index: &[u8]) -> Result<Option<&mut T>, failure::Error> {
+        if index.len() != self.index_length {
+            return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
+        }
+        
+        let entry = self.index_map.get(index).map(|entry| *entry);
+
+        Ok( entry.map(move |entry| &mut self.sample_thing[entry]) )
+    }
+
+    #[allow(dead_code)]
     pub fn mapping_table(&self) -> String {
         let mut table = String::new();
         for (index, entry) in self.index_map.iter() {
@@ -105,11 +117,10 @@ impl fmt::Display for SampleError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SampleError::BadSheetLine(line) => write!(f, "Bad sample sheet line: \"{}\"", line),
-            SampleError::IndexBadLength(ilen, idx) => write!(f, "Index length wrong: index {} but length {}", 
+            SampleError::IndexBadLength(ilen, idx) => write!(f, "Index length wrong: index \"{}\" but length {}", 
                                                              str::from_utf8(idx).unwrap_or("???"), ilen),
             SampleError::IndexClash(idx) => write!(f, "Index clash: index {}",
                                                    str::from_utf8(idx).unwrap_or("???")),
-            _ => Ok( () ),
         }
     }
 }

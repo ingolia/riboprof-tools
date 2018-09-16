@@ -4,20 +4,19 @@ extern crate clap;
 
 extern crate bio;
 
-use std::error::Error;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path,PathBuf};
 use std::str;
 
-use clap::{App, Arg, ArgMatches};
+use clap::{App, Arg};
 
 use bio::io::fastq;
 
 mod linkers;
 mod sample_sheet;
 
-use linkers::LinkerSpec;
+use linkers::*;
 use sample_sheet::*;
 
 #[derive(Debug)]
@@ -32,12 +31,6 @@ struct Config {
     progress: Option<usize>,
 }
 
-#[derive(Debug)]
-struct Sample {
-    name: String,
-    dest: fastq::Writer<fs::File>,
-}
-
 fn main() {
     match run() {
         Err(e) => { io::stderr().write(format!("{}\n", e).as_bytes()).unwrap();
@@ -48,7 +41,7 @@ fn main() {
 }
 
 fn run() -> Result<(), failure::Error> {
-    let config = cli_config()?;
+    let mut config = cli_config()?;
 
     for input_name in config.fastx_inputs.iter() {
         let input_reader: Box<Read> = if input_name == Path::new("-") {
@@ -61,13 +54,12 @@ fn run() -> Result<(), failure::Error> {
             let fq = fqres?;
 
             if fq.seq().len() < config.linker_spec.linker_length() + config.min_insert {
-
+                config.short_file.write_record(&fq)?;
             } else {
-                let split = config.linker_spec.split_seq(fq.seq())
+                let split = config.linker_spec.split_record(&fq)
                     .ok_or_else(|| failure::err_msg(format!("Split failed on \"{}\"", str::from_utf8(fq.seq()).unwrap_or("???"))))?;
-                let sample = config.sample_map.get(split.sample_index())?.unwrap_or(&config.unknown_sample);
-
-                
+                let sample = config.sample_map.get_mut(split.sample_index())?.unwrap_or(&mut config.unknown_sample);
+                sample.handle_split_read(&fq, &split)?;
             }
         }
     }
@@ -168,4 +160,19 @@ fn create_fastq_writer(output_dir: &Path, name: &str) -> Result<fastq::Writer<fs
     output_path.push(Path::new(name));
     output_path.set_extension("fastq");
     fastq::Writer::to_file(output_path.as_path()).map_err(::std::convert::Into::into)
+}
+
+#[derive(Debug)]
+struct Sample {
+    name: String,
+    dest: fastq::Writer<fs::File>,
+}
+
+impl Sample {
+    fn handle_split_read(&mut self, fq: &fastq::Record, split: &LinkerSplit) -> Result<(), failure::Error> {
+        let umi_id = format!("{}#{}", fq.id(), str::from_utf8(split.umi())?);
+        let splitfq = fastq::Record::with_attrs(umi_id.as_str(), fq.desc(), split.sequence(), split.quality());
+        self.dest.write_record(&splitfq)?;
+        Ok( () )
+    }
 }
