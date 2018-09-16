@@ -6,11 +6,11 @@ use std::str;
 
 use failure;
 
+#[derive(Debug, Clone)]
 pub struct SampleMap<T> {
     index_length: usize,
     index_map: HashMap<Vec<u8>, usize>,
     sample_index: Vec<Vec<u8>>,
-    sample_name: Vec<String>,
     sample_thing: Vec<T>,
 }
 
@@ -19,19 +19,17 @@ impl <T> SampleMap<T> {
         SampleMap { index_length: index_length,
                     index_map: HashMap::new(),
                     sample_index: Vec::new(),
-                    sample_name: Vec::new(),
                     sample_thing: Vec::new()
         }
     }
 
-    pub fn insert(&mut self, index: Vec<u8>, allow_mismatch: bool, name: String, thing: T) -> Result<(), failure::Error> {
+    pub fn insert(&mut self, index: Vec<u8>, allow_mismatch: bool, thing: T) -> Result<(), failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index).into());
         }
 
         let i = self.sample_index.len();
         self.sample_index.push(index.to_vec());
-        self.sample_name.push(name);
         self.sample_thing.push(thing);
         
         self.insert_index(index.clone(), i)?;
@@ -53,15 +51,31 @@ impl <T> SampleMap<T> {
 
     fn insert_index(&mut self, index: Vec<u8>, entry: usize) -> Result<(), failure::Error> {
         match self.index_map.entry(index) {
-            Entry::Occupied(occ) => {
-                Err(SampleError::IndexClash(occ.key().to_vec(), 
-                                            self.sample_name.get(*occ.get()).map_or("???", String::as_str).to_string(),
-                                            self.sample_name.get(entry).map_or("???", String::as_str).to_string()))
-            }
-
+            Entry::Occupied(occ) =>
+                Err(SampleError::IndexClash(occ.key().to_vec())),
             Entry::Vacant(vac) => Ok( vac.insert(entry) ),
         }?;
         Ok( () )
+    }
+
+    pub fn get(&self, index: &[u8]) -> Result<Option<(&T)>, failure::Error> {
+        if index.len() != self.index_length {
+            return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
+        }
+        
+        let entry = self.index_map.get(index);
+
+        Ok( entry.map(|entry| &self.sample_thing[*entry]) )
+    }
+
+    pub fn mapping_table(&self) -> String {
+        let mut table = String::new();
+        for (index, entry) in self.index_map.iter() {
+            table.push_str(&format!("{}\t{}\t{}\n", str::from_utf8(index).unwrap(), 
+                                    *entry, 
+                                    str::from_utf8(&self.sample_index[*entry]).unwrap()));
+        }
+        table
     }
 }
 
@@ -84,7 +98,7 @@ fn parse_sample_line(line: &str) -> Result<(String, String), failure::Error> {
 enum SampleError {
     BadSheetLine(String),
     IndexBadLength(usize, Vec<u8>),
-    IndexClash(Vec<u8>, String, String),
+    IndexClash(Vec<u8>),
 }
 
 impl fmt::Display for SampleError {
@@ -93,8 +107,8 @@ impl fmt::Display for SampleError {
             SampleError::BadSheetLine(line) => write!(f, "Bad sample sheet line: \"{}\"", line),
             SampleError::IndexBadLength(ilen, idx) => write!(f, "Index length wrong: index {} but length {}", 
                                                              str::from_utf8(idx).unwrap_or("???"), ilen),
-            SampleError::IndexClash(idx, sn1, sn2) => write!(f, "Index clash: index {} for samples \"{}\" and \"{}\"",
-                                                             str::from_utf8(idx).unwrap_or("???"), sn1, sn2),
+            SampleError::IndexClash(idx) => write!(f, "Index clash: index {}",
+                                                   str::from_utf8(idx).unwrap_or("???")),
             _ => Ok( () ),
         }
     }

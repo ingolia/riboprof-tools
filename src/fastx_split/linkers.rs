@@ -55,6 +55,34 @@ impl LinkerSpec {
             .filter(|&nt| *nt == LinkerNtSpec::SampleIndex)
             .count()
     }
+
+    pub fn split_seq<'a>(&self, sequence: &'a [u8]) -> Option<LinkerSplit<'a>> {
+        if sequence.len() >= self.prefix.len() + self.suffix.len() {
+            let mut umi = Vec::new();
+            let mut sample_index = Vec::new();
+
+            for i in 0..self.prefix.len() {
+                match self.prefix[i] {
+                    LinkerNtSpec::UMI => umi.push(sequence[i]),
+                    LinkerNtSpec::SampleIndex => sample_index.push(sequence[i]),
+                };
+            }
+
+            let suffix_start = sequence.len() - self.suffix.len();
+            for i in 0..self.suffix.len() {
+                match self.suffix[i] {
+                    LinkerNtSpec::UMI => umi.push(sequence[suffix_start + i]),
+                    LinkerNtSpec::SampleIndex => umi.push(sequence[suffix_start + i]),
+                };
+            }
+
+            Some( LinkerSplit { umi: umi, 
+                                sample_index: sample_index,
+                                sequence: &sequence[self.prefix.len()..suffix_start] } )
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for LinkerSpec {
@@ -72,46 +100,18 @@ impl fmt::Display for LinkerSpec {
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
-struct LinkerSplit<'a> {
+pub struct LinkerSplit<'a> {
     umi: Vec<u8>,
     sample_index: Vec<u8>,
     sequence: &'a [u8],
 }
 
 impl<'a> LinkerSplit<'a> {
-    pub fn new(spec: &LinkerSpec, sequence: &'a [u8]) -> Option<Self> {
-        if sequence.len() >= spec.prefix.len() + spec.suffix.len() {
-            let mut umi = Vec::new();
-            let mut sample_index = Vec::new();
-
-            for i in 0..spec.prefix.len() {
-                match spec.prefix[i] {
-                    LinkerNtSpec::UMI => umi.push(sequence[i]),
-                    LinkerNtSpec::SampleIndex => sample_index.push(sequence[i]),
-                };
-            }
-
-            let suffix_start = sequence.len() - spec.suffix.len();
-            for i in 0..spec.suffix.len() {
-                match spec.suffix[i] {
-                    LinkerNtSpec::UMI => umi.push(sequence[suffix_start + i]),
-                    LinkerNtSpec::SampleIndex => umi.push(sequence[suffix_start + i]),
-                };
-            }
-
-            Some( LinkerSplit { umi: umi, 
-                                sample_index: sample_index,
-                                sequence: &sequence[spec.prefix.len()..suffix_start] } )
-        } else {
-            None
-        }
-    }
-
-    pub fn umi(&'a self) -> &'a [u8] {
+    pub fn umi<'b>(&'b self) -> &'b [u8] {
         &self.umi
     }
 
-    pub fn sample_index(&'a self) -> &'a [u8] {
+    pub fn sample_index<'b>(&'b self) -> &'b [u8] {
         &self.sample_index
     }
 
