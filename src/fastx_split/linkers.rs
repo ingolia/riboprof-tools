@@ -34,30 +34,59 @@ impl fmt::Display for LinkerNtSpec {
 pub struct LinkerSpec {
     prefix: Vec<LinkerNtSpec>,
     suffix: Vec<LinkerNtSpec>,
+    sample_index_length: usize,
+    umi_length: usize,
 }
 
 impl LinkerSpec {
     pub fn new(prefix_str: &str, suffix_str: &str) -> Result<Self, failure::Error> {
-        let prefix: Result<Vec<LinkerNtSpec>, failure::Error> = prefix_str.chars().map(LinkerNtSpec::new).collect();
-        let suffix: Result<Vec<LinkerNtSpec>, failure::Error> = suffix_str.chars().map(LinkerNtSpec::new).collect();
+        let prefix_res: Result<Vec<LinkerNtSpec>, failure::Error> =
+            prefix_str.chars().map(LinkerNtSpec::new).collect();
+        let suffix_res: Result<Vec<LinkerNtSpec>, failure::Error> =
+            suffix_str.chars().map(LinkerNtSpec::new).collect();
 
-        Ok( LinkerSpec { prefix: prefix?, suffix: suffix? } )
+        let prefix = prefix_res?;
+        let suffix = suffix_res?;
+
+        let sample_index_length = prefix
+            .iter()
+            .chain(suffix.iter())
+            .filter(|&nt| *nt == LinkerNtSpec::SampleIndex)
+            .count();
+        let umi_length = prefix
+            .iter()
+            .chain(suffix.iter())
+            .filter(|&nt| *nt == LinkerNtSpec::UMI)
+            .count();
+
+        Ok(LinkerSpec {
+            prefix: prefix,
+            suffix: suffix,
+            sample_index_length: sample_index_length,
+            umi_length: umi_length,
+        })
     }
 
     #[allow(dead_code)]
-    pub fn prefix_length(&self) -> usize { self.prefix.len() }
-    
-    #[allow(dead_code)]
-    pub fn suffix_length(&self) -> usize { self.suffix.len() }
+    pub fn prefix_length(&self) -> usize {
+        self.prefix.len()
+    }
 
-    pub fn linker_length(&self) -> usize { self.prefix.len() + self.suffix.len() }
+    #[allow(dead_code)]
+    pub fn suffix_length(&self) -> usize {
+        self.suffix.len()
+    }
+
+    pub fn linker_length(&self) -> usize {
+        self.prefix.len() + self.suffix.len()
+    }
 
     pub fn sample_index_length(&self) -> usize {
-        self.prefix
-            .iter()
-            .chain(self.suffix.iter())
-            .filter(|&nt| *nt == LinkerNtSpec::SampleIndex)
-            .count()
+        self.sample_index_length
+    }
+
+    pub fn umi_length(&self) -> usize {
+        self.umi_length
     }
 
     pub fn split_record<'a>(&self, fq: &'a fastq::Record) -> Option<LinkerSplit<'a>> {
@@ -82,10 +111,12 @@ impl LinkerSpec {
                 };
             }
 
-            Some( LinkerSplit { umi: umi, 
-                                sample_index: sample_index,
-                                sequence: &sequence[self.prefix.len()..suffix_start],
-                                quality: &fq.qual()[self.prefix.len()..suffix_start] } )
+            Some(LinkerSplit {
+                umi: umi,
+                sample_index: sample_index,
+                sequence: &sequence[self.prefix.len()..suffix_start],
+                quality: &fq.qual()[self.prefix.len()..suffix_start],
+            })
         } else {
             None
         }
@@ -102,7 +133,7 @@ impl fmt::Display for LinkerSpec {
         for nt in self.suffix.iter() {
             nt.fmt(f)?;
         }
-        Ok( () )
+        Ok(())
     }
 }
 
@@ -145,4 +176,4 @@ impl fmt::Display for LinkerError {
     }
 }
 
-impl error::Error for LinkerError { }
+impl error::Error for LinkerError {}
