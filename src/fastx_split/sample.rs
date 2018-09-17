@@ -1,4 +1,3 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -13,15 +12,17 @@ use linkers::*;
 #[derive(Debug)]
 pub struct Sample {
     name: String,
+    index: Vec<u8>,
     dest: fastq::Writer<fs::File>,
     total: usize,
     umi_count: HashMap<Vec<u8>, usize>,
 }
 
 impl Sample {
-    pub fn new(name: String, dest: fastq::Writer<fs::File>) -> Self {
+    pub fn new(name: String, index: Vec<u8>, dest: fastq::Writer<fs::File>) -> Self {
         Sample {
             name: name,
+            index: index,
             dest: dest,
             total: 0,
             umi_count: HashMap::new(),
@@ -50,6 +51,10 @@ impl Sample {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn index(&self) -> &[u8] {
+        &self.index
     }
 
     pub fn total(&self) -> usize {

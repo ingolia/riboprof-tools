@@ -85,6 +85,7 @@ impl LinkerSpec {
         self.sample_index_length
     }
 
+    #[allow(dead_code)]
     pub fn umi_length(&self) -> usize {
         self.umi_length
     }

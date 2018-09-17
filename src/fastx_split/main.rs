@@ -29,7 +29,6 @@ struct Config {
     linker_spec: LinkerSpec,
     sample_map: SampleMap<Sample>,
     short_file: fastq::Writer<fs::File>,
-    unknown_sample: Sample,
     progress: Option<usize>,
 }
 
@@ -46,6 +45,9 @@ fn main() {
 fn run() -> Result<(), failure::Error> {
     let mut config = cli_config()?;
 
+    let mut total = 0;
+    let mut tooshort = 0;
+
     for input_name in config.fastx_inputs.iter() {
         let input_reader: Box<Read> = if input_name == Path::new("-") {
             Box::new(io::stdin())
@@ -56,8 +58,11 @@ fn run() -> Result<(), failure::Error> {
         for fqres in fastq::Reader::new(input_reader).records() {
             let fq = fqres?;
 
+            total += 1;
+
             if fq.seq().len() < config.linker_spec.linker_length() + config.min_insert {
                 config.short_file.write_record(&fq)?;
+                tooshort += 1;
             } else {
                 let split = config.linker_spec.split_record(&fq).ok_or_else(|| {
                     failure::err_msg(format!(
@@ -65,18 +70,39 @@ fn run() -> Result<(), failure::Error> {
                         str::from_utf8(fq.seq()).unwrap_or("???")
                     ))
                 })?;
-                let sample = config
-                    .sample_map
-                    .get_mut(split.sample_index())?
-                    .unwrap_or(&mut config.unknown_sample);
+                let mut sample = config.sample_map.get_mut(split.sample_index())?;
                 sample.handle_split_read(&fq, &split)?;
             }
         }
     }
 
-    let mut stats_path = config.output_dir.clone();
-    stats_path.push(format!("{}_stats.txt", config.unknown_sample.name()));
-    fs::write(&stats_path, config.unknown_sample.stats_table());
+    let mut fates_path = config.output_dir.clone();
+    fates_path.push("fates.txt");
+    let mut fates = fs::File::create(&fates_path)?;
+
+    for sample_rc in config.sample_map.things() {
+        let sample = sample_rc.try_borrow()?;
+        let mut stats_path = config.output_dir.clone();
+        stats_path.push(format!("{}_stats.txt", sample.name()));
+        fs::write(&stats_path, sample.stats_table())?;
+
+        let fract = 100.0 * (sample.total() as f64) / (total as f64);
+        write!(
+            fates,
+            "{}\t{}\t{}\t{:.2}%\n",
+            sample.name(),
+            str::from_utf8(sample.index())?,
+            sample.total(),
+            fract
+        )?;
+    }
+
+    write!(
+        fates,
+        "short\tN/A\t{}\t{:.2}%\n",
+        tooshort,
+        100.0 * (tooshort as f64) / (total as f64)
+    )?;
 
     Ok(())
 }
@@ -152,20 +178,26 @@ fn cli_config() -> Result<Config, failure::Error> {
         .recursive(true)
         .create(output_dir.as_path())?;
 
-    let mut sample_map = SampleMap::new(index_length);
+    let unknown_sample = Sample::new(
+        "UnknownIndex".to_string(),
+        vec![b'N'; index_length],
+        create_fastq_writer(&output_dir, "UnknownIndex")?,
+    );
+
+    let mut sample_map = SampleMap::new(index_length, unknown_sample);
 
     let sample_sheet_txt = fs::read_to_string(matches.value_of("sample_sheet").unwrap())?;
     for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
         let output_file = create_fastq_writer(&output_dir, &name)?;
-        let sample = Sample::new(name.to_string(), output_file);
+        let sample = Sample::new(
+            name.to_string(),
+            index.to_string().into_bytes(),
+            output_file,
+        );
         sample_map.insert(index.into_bytes(), true, sample)?;
     }
 
     let short_file = create_fastq_writer(&output_dir, "tooshort")?;
-    let unknown_sample = Sample::new(
-        "UnknownIndex".to_string(),
-        create_fastq_writer(&output_dir, "UnknownIndex")?,
-    );
 
     let mut mapping_file = output_dir.clone();
     mapping_file.push("mapping.txt");
@@ -183,7 +215,6 @@ fn cli_config() -> Result<Config, failure::Error> {
         linker_spec: linker_spec,
         sample_map: sample_map,
         short_file: short_file,
-        unknown_sample: unknown_sample,
         progress: None,
     })
 }

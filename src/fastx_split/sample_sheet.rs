@@ -1,7 +1,9 @@
+use std::cell::*;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
+use std::rc::Rc;
 use std::str;
 
 use failure;
@@ -9,18 +11,42 @@ use failure;
 #[derive(Debug, Clone)]
 pub struct SampleMap<T> {
     index_length: usize,
-    index_map: HashMap<Vec<u8>, usize>,
-    sample_index: Vec<Vec<u8>>,
-    sample_thing: Vec<T>,
+    index_map: HashMap<Vec<u8>, SampleEntry<T>>,
+    unknown: SampleEntry<T>,
+    entries: Vec<SampleEntry<T>>,
+}
+
+#[derive(Debug, Clone)]
+struct SampleEntry<T> {
+    true_index: Vec<u8>,
+    thing: Rc<RefCell<T>>,
+}
+
+impl<T> SampleEntry<T> {
+    pub fn new<I: AsRef<[u8]>>(true_index: I, thing: &Rc<RefCell<T>>) -> Self {
+        SampleEntry {
+            true_index: true_index.as_ref().to_vec(),
+            thing: thing.clone(),
+        }
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for SampleEntry<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.thing.borrow())
+    }
 }
 
 impl<T> SampleMap<T> {
-    pub fn new(index_length: usize) -> Self {
+    pub fn new(index_length: usize, unknown: T) -> Self {
+        let unknown_rcrc = Rc::new(RefCell::new(unknown));
+        let unknown_index = vec![b'N'; index_length];
+
         SampleMap {
             index_length: index_length,
             index_map: HashMap::new(),
-            sample_index: Vec::new(),
-            sample_thing: Vec::new(),
+            unknown: SampleEntry::new(&unknown_index, &unknown_rcrc),
+            entries: vec![SampleEntry::new(&unknown_index, &unknown_rcrc)],
         }
     }
 
@@ -29,16 +55,14 @@ impl<T> SampleMap<T> {
         index: Vec<u8>,
         allow_mismatch: bool,
         thing: T,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<Rc<RefCell<T>>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index).into());
         }
 
-        let i = self.sample_index.len();
-        self.sample_index.push(index.to_vec());
-        self.sample_thing.push(thing);
+        let rcrc = Rc::new(RefCell::new(thing));
 
-        self.insert_index(index.clone(), i)?;
+        self.insert_index(index.clone(), SampleEntry::new(index.as_slice(), &rcrc))?;
 
         if allow_mismatch {
             for mm in 0..index.len() {
@@ -46,16 +70,22 @@ impl<T> SampleMap<T> {
                     if index[mm] != *nt {
                         let mut index_mut = index.clone();
                         index_mut[mm] = *nt;
-                        self.insert_index(index_mut, i)?;
+                        self.insert_index(index_mut, SampleEntry::new(index.as_slice(), &rcrc))?;
                     }
                 }
             }
         }
 
-        Ok(())
+        self.entries.push(SampleEntry::new(index.as_slice(), &rcrc));
+
+        Ok(rcrc)
     }
 
-    fn insert_index(&mut self, index: Vec<u8>, entry: usize) -> Result<(), failure::Error> {
+    fn insert_index(
+        &mut self,
+        index: Vec<u8>,
+        entry: SampleEntry<T>,
+    ) -> Result<(), failure::Error> {
         match self.index_map.entry(index) {
             Entry::Occupied(occ) => Err(SampleError::IndexClash(occ.key().to_vec())),
             Entry::Vacant(vac) => Ok(vac.insert(entry)),
@@ -64,24 +94,32 @@ impl<T> SampleMap<T> {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, index: &[u8]) -> Result<Option<&T>, failure::Error> {
+    pub fn get(&self, index: &[u8]) -> Result<Ref<T>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
 
-        let entry = self.index_map.get(index);
-
-        Ok(entry.map(|entry| &self.sample_thing[*entry]))
+        let entry = self.index_map.get(index).unwrap_or(&self.unknown);
+        let thing = entry.thing.try_borrow()?;
+        Ok(thing)
     }
 
-    pub fn get_mut(&mut self, index: &[u8]) -> Result<Option<&mut T>, failure::Error> {
+    pub fn get_mut(&mut self, index: &[u8]) -> Result<RefMut<T>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
 
-        let entry = self.index_map.get(index).map(|entry| *entry);
+        let entry = self.index_map.get(index).unwrap_or(&self.unknown);
+        let thing = entry.thing.try_borrow_mut()?;
+        Ok(thing)
+    }
 
-        Ok(entry.map(move |entry| &mut self.sample_thing[entry]))
+    pub fn things(&self) -> Vec<Rc<RefCell<T>>> {
+        let mut things = Vec::new();
+        for entry in self.entries.iter() {
+            things.push(entry.thing.clone());
+        }
+        things
     }
 }
 
@@ -92,8 +130,8 @@ impl<T: fmt::Display> SampleMap<T> {
             table.push_str(&format!(
                 "{}\t{}\t{}\n",
                 str::from_utf8(index).unwrap(),
-                self.sample_thing[*entry],
-                str::from_utf8(&self.sample_index[*entry]).unwrap()
+                entry,
+                str::from_utf8(entry.true_index.as_slice()).unwrap()
             ));
         }
         table
