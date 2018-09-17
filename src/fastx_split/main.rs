@@ -14,9 +14,11 @@ use clap::{App, Arg};
 use bio::io::fastq;
 
 mod linkers;
+mod sample;
 mod sample_sheet;
 
 use linkers::*;
+use sample::*;
 use sample_sheet::*;
 
 #[derive(Debug)]
@@ -71,6 +73,10 @@ fn run() -> Result<(), failure::Error> {
             }
         }
     }
+
+    let mut stats_path = config.output_dir.clone();
+    stats_path.push(format!("{}_stats.txt", config.unknown_sample.name()));
+    fs::write(&stats_path, config.unknown_sample.stats_table());
 
     Ok(())
 }
@@ -151,18 +157,19 @@ fn cli_config() -> Result<Config, failure::Error> {
     let sample_sheet_txt = fs::read_to_string(matches.value_of("sample_sheet").unwrap())?;
     for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
         let output_file = create_fastq_writer(&output_dir, &name)?;
-        let sample = Sample {
-            name: name.to_string(),
-            dest: output_file,
-        };
+        let sample = Sample::new(name.to_string(), output_file);
         sample_map.insert(index.into_bytes(), true, sample)?;
     }
 
     let short_file = create_fastq_writer(&output_dir, "tooshort")?;
-    let unknown_sample = Sample {
-        name: "UnknownIndex".to_string(),
-        dest: create_fastq_writer(&output_dir, "UnknownIndex")?,
-    };
+    let unknown_sample = Sample::new(
+        "UnknownIndex".to_string(),
+        create_fastq_writer(&output_dir, "UnknownIndex")?,
+    );
+
+    let mut mapping_file = output_dir.clone();
+    mapping_file.push("mapping.txt");
+    fs::write(&mapping_file, sample_map.mapping_table())?;
 
     Ok(Config {
         fastx_inputs: matches
@@ -189,28 +196,4 @@ fn create_fastq_writer(
     output_path.push(Path::new(name));
     output_path.set_extension("fastq");
     fastq::Writer::to_file(output_path.as_path()).map_err(::std::convert::Into::into)
-}
-
-#[derive(Debug)]
-struct Sample {
-    name: String,
-    dest: fastq::Writer<fs::File>,
-}
-
-impl Sample {
-    fn handle_split_read(
-        &mut self,
-        fq: &fastq::Record,
-        split: &LinkerSplit,
-    ) -> Result<(), failure::Error> {
-        let umi_id = format!("{}#{}", fq.id(), str::from_utf8(split.umi())?);
-        let splitfq = fastq::Record::with_attrs(
-            umi_id.as_str(),
-            fq.desc(),
-            split.sequence(),
-            split.quality(),
-        );
-        self.dest.write_record(&splitfq)?;
-        Ok(())
-    }
 }

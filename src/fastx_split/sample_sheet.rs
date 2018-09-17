@@ -83,15 +83,16 @@ impl<T> SampleMap<T> {
 
         Ok(entry.map(move |entry| &mut self.sample_thing[entry]))
     }
+}
 
-    #[allow(dead_code)]
+impl<T: fmt::Display> SampleMap<T> {
     pub fn mapping_table(&self) -> String {
         let mut table = String::new();
         for (index, entry) in self.index_map.iter() {
             table.push_str(&format!(
                 "{}\t{}\t{}\n",
                 str::from_utf8(index).unwrap(),
-                *entry,
+                self.sample_thing[*entry],
                 str::from_utf8(&self.sample_index[*entry]).unwrap()
             ));
         }
