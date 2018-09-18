@@ -21,7 +21,6 @@ use linkers::*;
 use sample::*;
 use sample_sheet::*;
 
-#[derive(Debug)]
 struct Config {
     fastx_inputs: Vec<PathBuf>,
     output_dir: PathBuf,
@@ -181,14 +180,14 @@ fn cli_config() -> Result<Config, failure::Error> {
     let unknown_sample = Sample::new(
         "UnknownIndex".to_string(),
         vec![b'N'; index_length],
-        create_fastq_writer(&output_dir, "UnknownIndex")?,
+        create_writer(&output_dir, "UnknownIndex")?,
     );
 
     let mut sample_map = SampleMap::new(index_length, unknown_sample);
 
     let sample_sheet_txt = fs::read_to_string(matches.value_of("sample_sheet").unwrap())?;
     for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
-        let output_file = create_fastq_writer(&output_dir, &name)?;
+        let output_file = create_writer(&output_dir, &name)?;
         let sample = Sample::new(
             name.to_string(),
             index.to_string().into_bytes(),
@@ -197,7 +196,7 @@ fn cli_config() -> Result<Config, failure::Error> {
         sample_map.insert(index.into_bytes(), true, sample)?;
     }
 
-    let short_file = create_fastq_writer(&output_dir, "tooshort")?;
+    let short_file = fastq::Writer::new(create_writer(&output_dir, "tooshort")?);
 
     let mut mapping_file = output_dir.clone();
     mapping_file.push("mapping.txt");
@@ -219,12 +218,12 @@ fn cli_config() -> Result<Config, failure::Error> {
     })
 }
 
-fn create_fastq_writer(
+fn create_writer(
     output_dir: &Path,
     name: &str,
-) -> Result<fastq::Writer<fs::File>, failure::Error> {
+) -> Result<fs::File, failure::Error> {
     let mut output_path = output_dir.to_path_buf();
     output_path.push(Path::new(name));
     output_path.set_extension("fastq");
-    fastq::Writer::to_file(output_path.as_path()).map_err(::std::convert::Into::into)
+    fs::File::create(output_path.as_path()).map_err(::std::convert::Into::into)
 }
