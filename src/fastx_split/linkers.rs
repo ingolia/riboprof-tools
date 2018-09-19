@@ -230,3 +230,48 @@ impl fmt::Display for LinkerError {
 }
 
 impl error::Error for LinkerError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SEQ1: &[u8] = b"ACGTACGTACGTACGT";
+    const SEQ2: &[u8] = b"AAAACCCCGGGGTTTT";
+    const SEQ3: &[u8] = b"ATCGATCGATCGATCGAT";
+
+    fn fastq(seq: &[u8]) -> fastq::Record
+    {
+        let qual: Vec<u8> = (32..(32+(seq.len() as u8))).collect();
+        fastq::Record::with_attrs("test_record", None, seq, &qual)
+    }
+
+    fn assert_split(raw_seq: &[u8], prefix: &str, suffix: &str, umi: &[u8], index: &[u8], sequence: &[u8], qualstart: u8) -> ()
+    {
+        let rec = fastq(raw_seq);
+        let spec = LinkerSpec::new(prefix, suffix).unwrap();
+        let split = spec.split_record(&rec).unwrap();
+
+        assert!(split.umi() == umi);
+        assert!(split.sample_index() == index);
+        assert!(split.sequence() == sequence);
+        assert!(split.quality()[0] == qualstart);
+        assert!(split.quality().len() == split.sequence().len());
+        for i in 0..(split.sequence().len()-1) {
+            assert!(split.quality()[i+1] == split.quality()[i] + 1);
+        }
+    }
+
+    #[test]
+    fn test_nnn_iii() {
+        assert_split(SEQ1, "NNN", "III", b"ACG", b"CGT", b"TACGTACGTA", 3 + 32);
+        assert_split(SEQ2, "NNN", "III", b"AAA", b"TTT", b"ACCCCGGGGT", 3 + 32);
+        assert_split(SEQ3, "NNN", "III", b"ATC", b"GAT", b"GATCGATCGATC", 3+32);
+    }
+
+    #[test]
+    fn test_i_nnnn() {
+        assert_split(SEQ1, "I", "NNNN", b"ACGT", b"A", b"CGTACGTACGT", 1+32);
+        assert_split(SEQ2, "I", "NNNN", b"TTTT", b"A", b"AAACCCCGGGG", 1+32);
+        assert_split(SEQ3, "I", "NNNN", b"CGAT", b"A", b"TCGATCGATCGAT", 1+32);
+    }
+}
