@@ -262,6 +262,19 @@ mod tests {
     }
 
     #[test]
+    fn test_0_0() {
+        assert_split(SEQ1, "", "", b"", b"", SEQ1, 0+32);
+        assert_split(SEQ2, "", "", b"", b"", SEQ2, 0+32);
+        assert_split(SEQ3, "", "", b"", b"", SEQ3, 0+32);
+        let spec = LinkerSpec::new("", "").unwrap();
+        assert!(spec.prefix_length() == 0);
+        assert!(spec.suffix_length() == 0);
+        assert!(spec.linker_length() == 0);
+        assert!(spec.sample_index_length() == 0);
+        assert!(spec.umi_length() == 0);
+    }
+
+    #[test]
     fn test_iinn_iinn() {
         assert_split(SEQ1, "IINN", "IINN", b"GTGT", b"ACAC", b"ACGTACGT", 4+32);
         assert_split(SEQ2, "IINN", "IINN", b"AATT", b"AATT", b"CCCCGGGG", 4+32);
@@ -324,5 +337,32 @@ mod tests {
         assert!(spec.linker_length() == 5);
         assert!(spec.sample_index_length() == 1);
         assert!(spec.umi_length() == 4);
+    }
+
+    const SEQ10: &[u8] = b"ACACAGTGTG";
+    const SEQ11: &[u8] = b"TGCATGCATGC";
+    const SEQ12: &[u8] = b"CCCTTTGGGAAA";
+
+    #[test]
+    fn test_too_long() {
+        let spec = LinkerSpec::new("IIIII", "NNNNNN").unwrap();
+
+        let rec10 = fastq(SEQ10);
+        let rec11 = fastq(SEQ11);
+        let rec12 = fastq(SEQ12);
+
+        let split10 = spec.split_record(&rec10);
+        let split11 = spec.split_record(&rec11);
+        let split12 = spec.split_record(&rec12);
+
+        assert!(split10 == None);
+
+        assert!(split11.as_ref().map(LinkerSplit::umi) == Some(b"GCATGC"));
+        assert!(split11.as_ref().map(LinkerSplit::sample_index) == Some(b"TGCAT"));
+        assert!(split11.as_ref().map(LinkerSplit::sequence) == Some(b""));
+
+        assert!(split12.as_ref().map(LinkerSplit::umi) == Some(b"GGGAAA"));
+        assert!(split12.as_ref().map(LinkerSplit::sample_index) == Some(b"CCCTT"));
+        assert!(split12.as_ref().map(LinkerSplit::sequence) == Some(b"T"));
     }
 }

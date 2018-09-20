@@ -135,3 +135,83 @@ impl fmt::Display for Sample {
         write!(f, "{}", self.name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::cell::*;
+    use std::ops::*;
+    use std::rc::*;
+
+    use linkers::*;
+
+    struct TestWriter {
+        dest: Rc<RefCell<Vec<u8>>>
+    }
+    
+    impl io::Write for TestWriter {
+        fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+            self.dest.borrow_mut().append(&mut buf.to_vec());
+            Ok( buf.len() )
+        }
+
+        fn flush(&mut self) -> Result<(), io::Error> { Ok( () ) }
+    }
+
+    #[test]
+    fn sample_output()
+    {
+        let outbuf = Rc::new(RefCell::new(Vec::new()));
+
+        { 
+            let writer = TestWriter { dest: outbuf.clone() };
+            let mut sample = Sample::new("One".to_string(), b"ACGT".to_vec(), writer);
+            
+            let linker_spec = LinkerSpec::new("NN", "NNIIII").unwrap();
+
+            let rec1 = fastq::Record::with_attrs("test_record", None, b"ACGTACGTACGTACGT", &vec![40; 16]);
+            let spl1 = linker_spec.split_record(&rec1).unwrap();
+            sample.handle_split_read(&rec1, &spl1).unwrap();
+            assert!(sample.total() == 1);
+            
+            let rec2 = fastq::Record::with_attrs("another", None, b"TGTGCGAGCTAGTCACTC", &vec![37; 18]);
+            let spl2 = linker_spec.split_record(&rec2).unwrap();
+            sample.handle_split_read(&rec2, &spl2).unwrap();
+            assert!(sample.total() == 2);
+        }
+
+        let mut exp = b"@test_record#ACGT\nGTACGTAC\n+\n((((((((\n".to_vec();
+        let mut exp2 = b"@another#TGTC\nTGCGAGCTAG\n+\n%%%%%%%%%%\n".to_vec();
+        exp.append(&mut exp2);
+
+        assert!(outbuf.borrow().as_slice() == exp.as_slice());
+    }
+
+    #[test]
+    fn sample_umi_counts()
+    {
+        let linker_spec = LinkerSpec::new("", "NN").unwrap();
+
+        let mut sample = Sample::new("Two".to_string(), Vec::new(), io::sink());
+
+        for nt1 in b"ACCGGGTTTT" {
+            for nt2 in b"AAAACCCGGT" {
+                let mut seq = b"TGGTGCCGCAAC".to_vec();
+                seq.push(*nt1);
+                seq.push(*nt2);
+                let rec = fastq::Record::with_attrs("test", None, &seq, &vec![40; seq.len()]);
+                let spl = linker_spec.split_record(&rec).unwrap();
+                sample.handle_split_read(&rec, &spl).unwrap();
+            }
+        }
+        
+        let mut exp = "AA\t4\nAC\t3\nAG\t2\nAT\t1\nAN\t0\n".to_string();
+        exp.push_str("CA\t8\nCC\t6\nCG\t4\nCT\t2\nCN\t0\n");
+        exp.push_str("GA\t12\nGC\t9\nGG\t6\nGT\t3\nGN\t0\n");
+        exp.push_str("TA\t16\nTC\t12\nTG\t8\nTT\t4\nTN\t0\n");
+        exp.push_str("NA\t0\nNC\t0\nNG\t0\nNT\t0\nNN\t0\n");
+
+        assert!(sample.stats_table() == exp);
+    }
+}
