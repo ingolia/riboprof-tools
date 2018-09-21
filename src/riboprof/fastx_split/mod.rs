@@ -3,7 +3,6 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str;
 
-use clap::{App, Arg};
 use failure;
 
 use bio::io::fastq;
@@ -17,87 +16,13 @@ use fastx_split::sample::*;
 use fastx_split::sample_sheet::*;
 
 pub struct CLI {
-    fastx_inputs: Vec<String>,
-    output_dir: String,
-    min_insert: usize,
-    prefix: String,
-    suffix: String,
-    sample_sheet: String,
-    progress: usize,
-}
-
-impl CLI {
-    pub fn new() -> Result<CLI, failure::Error> {
-        let matches = App::new("fastx-split")
-            .version("0.1.0")
-            .author("Nick Ingolia <ingolia@berkeley.edu>")
-            .about("Split FastQ file using index and random nucleotides")
-            .arg(
-                Arg::with_name("output_dir")
-                    .short("o")
-                    .long("output-dir")
-                    .value_name("OUTPUT-DIR")
-                    .help("Output directory name")
-                    .takes_value(true)
-                    .required(true),
-            )
-            .arg(
-                Arg::with_name("min_insert")
-                    .short("m")
-                    .long("min-insert")
-                    .value_name("MIN-INSERT")
-                    .help("Minimum insert length")
-                    .takes_value(true)
-                    .default_value("0"),
-            )
-            .arg(
-                Arg::with_name("prefix")
-                    .short("p")
-                    .long("prefix")
-                    .value_name("PREFIX")
-                    .help("Prefix format string")
-                    .takes_value(true)
-                    .default_value(""),
-            )
-            .arg(
-                Arg::with_name("suffix")
-                    .short("x")
-                    .long("suffix")
-                    .value_name("SUFFIX")
-                    .help("Suffix format string")
-                    .takes_value(true)
-                    .default_value(""),
-            )
-            .arg(
-                Arg::with_name("sample_sheet")
-                    .short("s")
-                    .long("sample-sheet")
-                    .value_name("SAMPLESHEET.CSV")
-                    .help("File name of CSV-format sample sheet")
-                    .takes_value(true)
-                    .required(true),
-            )
-            .arg(
-                Arg::with_name("progress")
-                    .long("progress")
-                    .value_name("NSEQS")
-                    .help("Report progress every NSEQS sequences")
-                    .takes_value(true)
-                    .default_value("0"),
-            )
-            .arg(Arg::with_name("input").multiple(true).required(true))
-            .get_matches();
-
-        Ok(CLI {
-            fastx_inputs: matches.values_of_lossy("input").unwrap(),
-            output_dir: matches.value_of("output_dir").unwrap().to_string(),
-            min_insert: value_t!(matches.value_of("min_insert"), usize)?,
-            prefix: matches.value_of("prefix").unwrap().to_string(),
-            suffix: matches.value_of("suffix").unwrap().to_string(),
-            sample_sheet: matches.value_of("sample_sheet").unwrap().to_string(),
-            progress: value_t!(matches.value_of("progress"), usize)?,
-        })
-    }
+    pub fastx_inputs: Vec<String>,
+    pub output_dir: String,
+    pub min_insert: usize,
+    pub prefix: String,
+    pub suffix: String,
+    pub sample_sheet: String,
+    pub progress: usize,
 }
 
 pub struct Config {
