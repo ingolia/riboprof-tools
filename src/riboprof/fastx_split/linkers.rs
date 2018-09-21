@@ -56,7 +56,7 @@ impl LinkerSpec {
     /// Create a new linker specification from prefix and suffix
     /// specification strings.
     ///
-    /// # Arguments 
+    /// # Arguments
     ///
     /// * `prefix_str` describes the nucleotide prefix
     /// removed from the beginning of the sequence
@@ -132,7 +132,7 @@ impl LinkerSpec {
     /// specification. If the sequence is too short to split -- if its
     /// total length is less than the total linker length -- then
     /// `None` is returned.
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `fq` is a FastQ record
@@ -239,14 +239,20 @@ mod tests {
     const SEQ2: &[u8] = b"AAAACCCCGGGGTTTT";
     const SEQ3: &[u8] = b"CGATCGATCGATCGATCG";
 
-    fn fastq(seq: &[u8]) -> fastq::Record
-    {
-        let qual: Vec<u8> = (32..(32+(seq.len() as u8))).collect();
+    fn fastq(seq: &[u8]) -> fastq::Record {
+        let qual: Vec<u8> = (32..(32 + (seq.len() as u8))).collect();
         fastq::Record::with_attrs("test_record", None, seq, &qual)
     }
 
-    fn assert_split(raw_seq: &[u8], prefix: &str, suffix: &str, umi: &[u8], index: &[u8], sequence: &[u8], qualstart: u8) -> ()
-    {
+    fn assert_split(
+        raw_seq: &[u8],
+        prefix: &str,
+        suffix: &str,
+        umi: &[u8],
+        index: &[u8],
+        sequence: &[u8],
+        qualstart: u8,
+    ) -> () {
         let rec = fastq(raw_seq);
         let spec = LinkerSpec::new(prefix, suffix).unwrap();
         let split = spec.split_record(&rec).unwrap();
@@ -256,16 +262,16 @@ mod tests {
         assert!(split.sequence() == sequence);
         assert!(split.quality()[0] == qualstart);
         assert!(split.quality().len() == split.sequence().len());
-        for i in 0..(split.sequence().len()-1) {
-            assert!(split.quality()[i+1] == split.quality()[i] + 1);
+        for i in 0..(split.sequence().len() - 1) {
+            assert!(split.quality()[i + 1] == split.quality()[i] + 1);
         }
     }
 
     #[test]
     fn test_0_0() {
-        assert_split(SEQ1, "", "", b"", b"", SEQ1, 0+32);
-        assert_split(SEQ2, "", "", b"", b"", SEQ2, 0+32);
-        assert_split(SEQ3, "", "", b"", b"", SEQ3, 0+32);
+        assert_split(SEQ1, "", "", b"", b"", SEQ1, 0 + 32);
+        assert_split(SEQ2, "", "", b"", b"", SEQ2, 0 + 32);
+        assert_split(SEQ3, "", "", b"", b"", SEQ3, 0 + 32);
         let spec = LinkerSpec::new("", "").unwrap();
         assert!(spec.prefix_length() == 0);
         assert!(spec.suffix_length() == 0);
@@ -276,9 +282,17 @@ mod tests {
 
     #[test]
     fn test_iinn_iinn() {
-        assert_split(SEQ1, "IINN", "IINN", b"GTGT", b"ACAC", b"ACGTACGT", 4+32);
-        assert_split(SEQ2, "IINN", "IINN", b"AATT", b"AATT", b"CCCCGGGG", 4+32);
-        assert_split(SEQ3, "IINN", "IINN", b"ATCG", b"CGAT", b"CGATCGATCG", 4+32);
+        assert_split(SEQ1, "IINN", "IINN", b"GTGT", b"ACAC", b"ACGTACGT", 4 + 32);
+        assert_split(SEQ2, "IINN", "IINN", b"AATT", b"AATT", b"CCCCGGGG", 4 + 32);
+        assert_split(
+            SEQ3,
+            "IINN",
+            "IINN",
+            b"ATCG",
+            b"CGAT",
+            b"CGATCGATCG",
+            4 + 32,
+        );
         let spec = LinkerSpec::new("IINN", "IINN").unwrap();
         assert!(spec.prefix_length() == 4);
         assert!(spec.suffix_length() == 4);
@@ -289,9 +303,9 @@ mod tests {
 
     #[test]
     fn test_nnii_0() {
-        assert_split(SEQ1, "NNII", "", b"AC", b"GT", b"ACGTACGTACGT", 4+32);
-        assert_split(SEQ2, "NNII", "", b"AA", b"AA", b"CCCCGGGGTTTT", 4+32);
-        assert_split(SEQ3, "NNII", "", b"CG", b"AT", b"CGATCGATCGATCG", 4+32);
+        assert_split(SEQ1, "NNII", "", b"AC", b"GT", b"ACGTACGTACGT", 4 + 32);
+        assert_split(SEQ2, "NNII", "", b"AA", b"AA", b"CCCCGGGGTTTT", 4 + 32);
+        assert_split(SEQ3, "NNII", "", b"CG", b"AT", b"CGATCGATCGATCG", 4 + 32);
         let spec = LinkerSpec::new("NNII", "").unwrap();
         assert!(spec.prefix_length() == 4);
         assert!(spec.suffix_length() == 0);
@@ -302,9 +316,17 @@ mod tests {
 
     #[test]
     fn test_0_ininnini() {
-        assert_split(SEQ1, "", "ININNINI", b"CTAG", b"AGCT", b"ACGTACGT", 0+32);
-        assert_split(SEQ2, "", "ININNINI", b"GGTT", b"GGTT", b"AAAACCCC", 0+32);
-        assert_split(SEQ3, "", "ININNINI", b"TGAC", b"ACTG", b"CGATCGATCG", 0+32);
+        assert_split(SEQ1, "", "ININNINI", b"CTAG", b"AGCT", b"ACGTACGT", 0 + 32);
+        assert_split(SEQ2, "", "ININNINI", b"GGTT", b"GGTT", b"AAAACCCC", 0 + 32);
+        assert_split(
+            SEQ3,
+            "",
+            "ININNINI",
+            b"TGAC",
+            b"ACTG",
+            b"CGATCGATCG",
+            0 + 32,
+        );
         let spec = LinkerSpec::new("", "ININNINI").unwrap();
         assert!(spec.prefix_length() == 0);
         assert!(spec.suffix_length() == 8);
@@ -328,9 +350,9 @@ mod tests {
 
     #[test]
     fn test_i_nnnn() {
-        assert_split(SEQ1, "I", "NNNN", b"ACGT", b"A", b"CGTACGTACGT", 1+32);
-        assert_split(SEQ2, "I", "NNNN", b"TTTT", b"A", b"AAACCCCGGGG", 1+32);
-        assert_split(SEQ3, "I", "NNNN", b"ATCG", b"C", b"GATCGATCGATCG", 1+32);
+        assert_split(SEQ1, "I", "NNNN", b"ACGT", b"A", b"CGTACGTACGT", 1 + 32);
+        assert_split(SEQ2, "I", "NNNN", b"TTTT", b"A", b"AAACCCCGGGG", 1 + 32);
+        assert_split(SEQ3, "I", "NNNN", b"ATCG", b"C", b"GATCGATCGATCG", 1 + 32);
         let spec = LinkerSpec::new("I", "NNNN").unwrap();
         assert!(spec.prefix_length() == 1);
         assert!(spec.suffix_length() == 4);

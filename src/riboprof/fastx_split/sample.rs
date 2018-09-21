@@ -7,7 +7,7 @@ use failure;
 
 use bio::io::fastq;
 
-use linkers::*;
+use fastx_split::linkers::*;
 
 /// Collected information about one particular sample
 pub struct Sample {
@@ -146,35 +146,40 @@ mod tests {
     use linkers::*;
 
     struct TestWriter {
-        dest: Rc<RefCell<Vec<u8>>>
+        dest: Rc<RefCell<Vec<u8>>>,
     }
-    
+
     impl io::Write for TestWriter {
         fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
             self.dest.borrow_mut().append(&mut buf.to_vec());
-            Ok( buf.len() )
+            Ok(buf.len())
         }
 
-        fn flush(&mut self) -> Result<(), io::Error> { Ok( () ) }
+        fn flush(&mut self) -> Result<(), io::Error> {
+            Ok(())
+        }
     }
 
     #[test]
-    fn sample_output()
-    {
+    fn sample_output() {
         let outbuf = Rc::new(RefCell::new(Vec::new()));
 
-        { 
-            let writer = TestWriter { dest: outbuf.clone() };
+        {
+            let writer = TestWriter {
+                dest: outbuf.clone(),
+            };
             let mut sample = Sample::new("One".to_string(), b"ACGT".to_vec(), writer);
-            
+
             let linker_spec = LinkerSpec::new("NN", "NNIIII").unwrap();
 
-            let rec1 = fastq::Record::with_attrs("test_record", None, b"ACGTACGTACGTACGT", &vec![40; 16]);
+            let rec1 =
+                fastq::Record::with_attrs("test_record", None, b"ACGTACGTACGTACGT", &vec![40; 16]);
             let spl1 = linker_spec.split_record(&rec1).unwrap();
             sample.handle_split_read(&rec1, &spl1).unwrap();
             assert!(sample.total() == 1);
-            
-            let rec2 = fastq::Record::with_attrs("another", None, b"TGTGCGAGCTAGTCACTC", &vec![37; 18]);
+
+            let rec2 =
+                fastq::Record::with_attrs("another", None, b"TGTGCGAGCTAGTCACTC", &vec![37; 18]);
             let spl2 = linker_spec.split_record(&rec2).unwrap();
             sample.handle_split_read(&rec2, &spl2).unwrap();
             assert!(sample.total() == 2);
@@ -188,8 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn sample_umi_counts()
-    {
+    fn sample_umi_counts() {
         let linker_spec = LinkerSpec::new("", "NN").unwrap();
 
         let mut sample = Sample::new("Two".to_string(), Vec::new(), io::sink());
@@ -204,7 +208,7 @@ mod tests {
                 sample.handle_split_read(&rec, &spl).unwrap();
             }
         }
-        
+
         let mut exp = "AA\t4\nAC\t3\nAG\t2\nAT\t1\nAN\t0\n".to_string();
         exp.push_str("CA\t8\nCC\t6\nCG\t4\nCT\t2\nCN\t0\n");
         exp.push_str("GA\t12\nGC\t9\nGG\t6\nGT\t3\nGN\t0\n");

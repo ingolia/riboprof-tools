@@ -1,15 +1,10 @@
-extern crate failure;
-#[macro_use]
-extern crate clap;
-
-extern crate bio;
-
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str;
 
 use clap::{App, Arg};
+use failure;
 
 use bio::io::fastq;
 
@@ -17,9 +12,9 @@ mod linkers;
 mod sample;
 mod sample_sheet;
 
-use linkers::*;
-use sample::*;
-use sample_sheet::*;
+use fastx_split::linkers::*;
+use fastx_split::sample::*;
+use fastx_split::sample_sheet::*;
 
 pub struct CLI {
     fastx_inputs: Vec<String>,
@@ -28,11 +23,11 @@ pub struct CLI {
     prefix: String,
     suffix: String,
     sample_sheet: String,
-    progress: usize
+    progress: usize,
 }
 
 impl CLI {
-    fn new() -> Result<CLI, failure::Error> {
+    pub fn new() -> Result<CLI, failure::Error> {
         let matches = App::new("fastx-split")
             .version("0.1.0")
             .author("Nick Ingolia <ingolia@berkeley.edu>")
@@ -93,15 +88,15 @@ impl CLI {
             .arg(Arg::with_name("input").multiple(true).required(true))
             .get_matches();
 
-        Ok( CLI { fastx_inputs: matches
-                  .values_of_lossy("input")
-                  .unwrap(),
-                  output_dir: matches.value_of("output_dir").unwrap().to_string(),
-                  min_insert: value_t!(matches.value_of("min_insert"), usize)?,
-                  prefix: matches.value_of("prefix").unwrap().to_string(),
-                  suffix: matches.value_of("suffix").unwrap().to_string(),
-                  sample_sheet: matches.value_of("sample_sheet").unwrap().to_string(),
-                  progress: value_t!(matches.value_of("progress"), usize)? } )
+        Ok(CLI {
+            fastx_inputs: matches.values_of_lossy("input").unwrap(),
+            output_dir: matches.value_of("output_dir").unwrap().to_string(),
+            min_insert: value_t!(matches.value_of("min_insert"), usize)?,
+            prefix: matches.value_of("prefix").unwrap().to_string(),
+            suffix: matches.value_of("suffix").unwrap().to_string(),
+            sample_sheet: matches.value_of("sample_sheet").unwrap().to_string(),
+            progress: value_t!(matches.value_of("progress"), usize)?,
+        })
     }
 }
 
@@ -119,7 +114,7 @@ impl Config {
     pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
         let linker_spec = LinkerSpec::new(&cli.prefix, &cli.suffix)?;
         let index_length = linker_spec.sample_index_length();
-        
+
         let output_dir = Path::new(&cli.output_dir).to_path_buf();
         fs::DirBuilder::new()
             .recursive(true)
@@ -130,9 +125,9 @@ impl Config {
             vec![b'N'; index_length],
             Config::create_writer(&output_dir, "UnknownIndex")?,
         );
-        
+
         let mut sample_map = SampleMap::new(index_length, unknown_sample);
-        
+
         let sample_sheet_txt = fs::read_to_string(&cli.sample_sheet)?;
         for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
             let output_file = Config::create_writer(&output_dir, &name)?;
@@ -143,32 +138,29 @@ impl Config {
             );
             sample_map.insert(index.into_bytes(), true, sample)?;
         }
-        
+
         let short_file = fastq::Writer::new(Config::create_writer(&output_dir, "tooshort")?);
-        
+
         let mut mapping_file = output_dir.clone();
         mapping_file.push("mapping.txt");
         fs::write(&mapping_file, sample_map.mapping_table())?;
-        
+
         Ok(Config {
-            fastx_inputs: cli.fastx_inputs
-                  .iter()
-                  .map(PathBuf::from)
-                  .collect(),
+            fastx_inputs: cli.fastx_inputs.iter().map(PathBuf::from).collect(),
             output_dir: output_dir,
             min_insert: cli.min_insert,
             linker_spec: linker_spec,
             sample_map: sample_map,
             short_file: short_file,
-            progress: if cli.progress > 0 { Some(cli.progress) } else { None },
+            progress: if cli.progress > 0 {
+                Some(cli.progress)
+            } else {
+                None
+            },
         })
-            
     }
 
-    fn create_writer(
-        output_dir: &Path,
-        name: &str,
-    ) -> Result<fs::File, failure::Error> {
+    fn create_writer(output_dir: &Path, name: &str) -> Result<fs::File, failure::Error> {
         let mut output_path = output_dir.to_path_buf();
         output_path.push(Path::new(name));
         output_path.set_extension("fastq");
@@ -176,17 +168,10 @@ impl Config {
     }
 }
 
-fn main() {
-    match run() {
-        Err(e) => {
-            io::stderr().write(format!("{}\n", e).as_bytes()).unwrap();
-            ::std::process::exit(1);
-        }
-        _ => (),
-    };
-}
-
-pub fn split_file<P: AsRef<Path>>(config: &mut Config, input_name: P) -> Result<(usize, usize), failure::Error> {
+pub fn split_file<P: AsRef<Path>>(
+    config: &mut Config,
+    input_name: P,
+) -> Result<(usize, usize), failure::Error> {
     let mut total = 0;
     let mut tooshort = 0;
 
@@ -216,11 +201,15 @@ pub fn split_file<P: AsRef<Path>>(config: &mut Config, input_name: P) -> Result<
         }
 
         if config.progress.map_or(false, |nprog| total % nprog == 0) {
-            print!("{:7} reads from {}\n", total, input_name.as_ref().to_str().unwrap_or("???"));
+            print!(
+                "{:7} reads from {}\n",
+                total,
+                input_name.as_ref().to_str().unwrap_or("???")
+            );
         }
     }
 
-    Ok( (total, tooshort) )
+    Ok((total, tooshort))
 }
 
 pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<(), failure::Error> {
@@ -252,13 +241,10 @@ pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<(),
         100.0 * (tooshort as f64) / (total as f64)
     )?;
 
-    Ok( () )
+    Ok(())
 }
 
-fn run() -> Result<(), failure::Error> {
-    let cli = CLI::new()?;
-    let mut config = Config::new(&cli)?;
-
+pub fn fastx_split(mut config: Config) -> Result<(), failure::Error> {
     let mut total = 0;
     let mut tooshort = 0;
 
