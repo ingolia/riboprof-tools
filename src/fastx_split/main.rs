@@ -21,7 +21,7 @@ use linkers::*;
 use sample::*;
 use sample_sheet::*;
 
-struct CLI {
+pub struct CLI {
     fastx_inputs: Vec<String>,
     output_dir: String,
     min_insert: usize,
@@ -105,7 +105,7 @@ impl CLI {
     }
 }
 
-struct Config {
+pub struct Config {
     fastx_inputs: Vec<PathBuf>,
     output_dir: PathBuf,
     min_insert: usize,
@@ -186,41 +186,44 @@ fn main() {
     };
 }
 
-fn run() -> Result<(), failure::Error> {
-    let cli = CLI::new()?;
-    let mut config = Config::new(&cli)?;
-
+pub fn split_file<P: AsRef<Path>>(config: &mut Config, input_name: P) -> Result<(usize, usize), failure::Error> {
     let mut total = 0;
     let mut tooshort = 0;
 
-    for input_name in config.fastx_inputs.iter() {
-        let input_reader: Box<Read> = if input_name == Path::new("-") {
-            Box::new(io::stdin())
+    let input_reader: Box<Read> = if input_name.as_ref() == Path::new("-") {
+        Box::new(io::stdin())
+    } else {
+        Box::new(fs::File::open(&input_name)?)
+    };
+
+    for fqres in fastq::Reader::new(input_reader).records() {
+        let fq = fqres?;
+
+        total += 1;
+
+        if fq.seq().len() < config.linker_spec.linker_length() + config.min_insert {
+            config.short_file.write_record(&fq)?;
+            tooshort += 1;
         } else {
-            Box::new(fs::File::open(input_name)?)
-        };
+            let split = config.linker_spec.split_record(&fq).ok_or_else(|| {
+                failure::err_msg(format!(
+                    "Split failed on \"{}\"",
+                    str::from_utf8(fq.seq()).unwrap_or("???")
+                ))
+            })?;
+            let mut sample = config.sample_map.get_mut(split.sample_index())?;
+            sample.handle_split_read(&fq, &split)?;
+        }
 
-        for fqres in fastq::Reader::new(input_reader).records() {
-            let fq = fqres?;
-
-            total += 1;
-
-            if fq.seq().len() < config.linker_spec.linker_length() + config.min_insert {
-                config.short_file.write_record(&fq)?;
-                tooshort += 1;
-            } else {
-                let split = config.linker_spec.split_record(&fq).ok_or_else(|| {
-                    failure::err_msg(format!(
-                        "Split failed on \"{}\"",
-                        str::from_utf8(fq.seq()).unwrap_or("???")
-                    ))
-                })?;
-                let mut sample = config.sample_map.get_mut(split.sample_index())?;
-                sample.handle_split_read(&fq, &split)?;
-            }
+        if config.progress.map_or(false, |nprog| total % nprog == 0) {
+            print!("{:7} reads from {}\n", total, input_name.as_ref().to_str().unwrap_or("???"));
         }
     }
 
+    Ok( (total, tooshort) )
+}
+
+pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<(), failure::Error> {
     let mut fates_path = config.output_dir.clone();
     fates_path.push("fates.txt");
     let mut fates = fs::File::create(&fates_path)?;
@@ -248,6 +251,24 @@ fn run() -> Result<(), failure::Error> {
         tooshort,
         100.0 * (tooshort as f64) / (total as f64)
     )?;
+
+    Ok( () )
+}
+
+fn run() -> Result<(), failure::Error> {
+    let cli = CLI::new()?;
+    let mut config = Config::new(&cli)?;
+
+    let mut total = 0;
+    let mut tooshort = 0;
+
+    for input_name in config.fastx_inputs.to_vec() {
+        let (file_total, file_tooshort) = split_file(&mut config, input_name)?;
+        total += file_total;
+        tooshort += file_tooshort;
+    }
+
+    write_stats(&config, total, tooshort)?;
 
     Ok(())
 }
