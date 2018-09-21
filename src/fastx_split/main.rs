@@ -21,6 +21,90 @@ use linkers::*;
 use sample::*;
 use sample_sheet::*;
 
+struct CLI {
+    fastx_inputs: Vec<String>,
+    output_dir: String,
+    min_insert: usize,
+    prefix: String,
+    suffix: String,
+    sample_sheet: String,
+    progress: usize
+}
+
+impl CLI {
+    fn new() -> Result<CLI, failure::Error> {
+        let matches = App::new("fastx-split")
+            .version("0.1.0")
+            .author("Nick Ingolia <ingolia@berkeley.edu>")
+            .about("Split FastQ file using index and random nucleotides")
+            .arg(
+                Arg::with_name("output_dir")
+                    .short("o")
+                    .long("output-dir")
+                    .value_name("OUTPUT-DIR")
+                    .help("Output directory name")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("min_insert")
+                    .short("m")
+                    .long("min-insert")
+                    .value_name("MIN-INSERT")
+                    .help("Minimum insert length")
+                    .takes_value(true)
+                    .default_value("0"),
+            )
+            .arg(
+                Arg::with_name("prefix")
+                    .short("p")
+                    .long("prefix")
+                    .value_name("PREFIX")
+                    .help("Prefix format string")
+                    .takes_value(true)
+                    .default_value(""),
+            )
+            .arg(
+                Arg::with_name("suffix")
+                    .short("x")
+                    .long("suffix")
+                    .value_name("SUFFIX")
+                    .help("Suffix format string")
+                    .takes_value(true)
+                    .default_value(""),
+            )
+            .arg(
+                Arg::with_name("sample_sheet")
+                    .short("s")
+                    .long("sample-sheet")
+                    .value_name("SAMPLESHEET.CSV")
+                    .help("File name of CSV-format sample sheet")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("progress")
+                    .long("progress")
+                    .value_name("NSEQS")
+                    .help("Report progress every NSEQS sequences")
+                    .takes_value(true)
+                    .default_value("0"),
+            )
+            .arg(Arg::with_name("input").multiple(true).required(true))
+            .get_matches();
+
+        Ok( CLI { fastx_inputs: matches
+                  .values_of_lossy("input")
+                  .unwrap(),
+                  output_dir: matches.value_of("output_dir").unwrap().to_string(),
+                  min_insert: value_t!(matches.value_of("min_insert"), usize)?,
+                  prefix: matches.value_of("prefix").unwrap().to_string(),
+                  suffix: matches.value_of("suffix").unwrap().to_string(),
+                  sample_sheet: matches.value_of("sample_sheet").unwrap().to_string(),
+                  progress: value_t!(matches.value_of("progress"), usize)? } )
+    }
+}
+
 struct Config {
     fastx_inputs: Vec<PathBuf>,
     output_dir: PathBuf,
@@ -29,6 +113,67 @@ struct Config {
     sample_map: SampleMap<Sample>,
     short_file: fastq::Writer<fs::File>,
     progress: Option<usize>,
+}
+
+impl Config {
+    pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
+        let linker_spec = LinkerSpec::new(&cli.prefix, &cli.suffix)?;
+        let index_length = linker_spec.sample_index_length();
+        
+        let output_dir = Path::new(&cli.output_dir).to_path_buf();
+        fs::DirBuilder::new()
+            .recursive(true)
+            .create(output_dir.as_path())?;
+
+        let unknown_sample = Sample::new(
+            "UnknownIndex".to_string(),
+            vec![b'N'; index_length],
+            Config::create_writer(&output_dir, "UnknownIndex")?,
+        );
+        
+        let mut sample_map = SampleMap::new(index_length, unknown_sample);
+        
+        let sample_sheet_txt = fs::read_to_string(&cli.sample_sheet)?;
+        for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
+            let output_file = Config::create_writer(&output_dir, &name)?;
+            let sample = Sample::new(
+                name.to_string(),
+                index.to_string().into_bytes(),
+                output_file,
+            );
+            sample_map.insert(index.into_bytes(), true, sample)?;
+        }
+        
+        let short_file = fastq::Writer::new(Config::create_writer(&output_dir, "tooshort")?);
+        
+        let mut mapping_file = output_dir.clone();
+        mapping_file.push("mapping.txt");
+        fs::write(&mapping_file, sample_map.mapping_table())?;
+        
+        Ok(Config {
+            fastx_inputs: cli.fastx_inputs
+                  .iter()
+                  .map(PathBuf::from)
+                  .collect(),
+            output_dir: output_dir,
+            min_insert: cli.min_insert,
+            linker_spec: linker_spec,
+            sample_map: sample_map,
+            short_file: short_file,
+            progress: if cli.progress > 0 { Some(cli.progress) } else { None },
+        })
+            
+    }
+
+    fn create_writer(
+        output_dir: &Path,
+        name: &str,
+    ) -> Result<fs::File, failure::Error> {
+        let mut output_path = output_dir.to_path_buf();
+        output_path.push(Path::new(name));
+        output_path.set_extension("fastq");
+        fs::File::create(output_path.as_path()).map_err(::std::convert::Into::into)
+    }
 }
 
 fn main() {
@@ -42,7 +187,8 @@ fn main() {
 }
 
 fn run() -> Result<(), failure::Error> {
-    let mut config = cli_config()?;
+    let cli = CLI::new()?;
+    let mut config = Config::new(&cli)?;
 
     let mut total = 0;
     let mut tooshort = 0;
@@ -104,126 +250,4 @@ fn run() -> Result<(), failure::Error> {
     )?;
 
     Ok(())
-}
-
-fn cli_config() -> Result<Config, failure::Error> {
-    let matches = App::new("fastx-split")
-        .version("0.1.0")
-        .author("Nick Ingolia <ingolia@berkeley.edu>")
-        .about("Split FastQ file using index and random nucleotides")
-        .arg(
-            Arg::with_name("output_dir")
-                .short("o")
-                .long("output-dir")
-                .value_name("OUTPUT-DIR")
-                .help("Output directory name")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("min_insert")
-                .short("m")
-                .long("min-insert")
-                .value_name("MIN-INSERT")
-                .help("Minimum insert length")
-                .takes_value(true)
-                .default_value("0"),
-        )
-        .arg(
-            Arg::with_name("prefix")
-                .short("p")
-                .long("prefix")
-                .value_name("PREFIX")
-                .help("Prefix format string")
-                .takes_value(true)
-                .default_value(""),
-        )
-        .arg(
-            Arg::with_name("suffix")
-                .short("x")
-                .long("suffix")
-                .value_name("SUFFIX")
-                .help("Suffix format string")
-                .takes_value(true)
-                .default_value(""),
-        )
-        .arg(
-            Arg::with_name("sample_sheet")
-                .short("s")
-                .long("sample-sheet")
-                .value_name("SAMPLESHEET.CSV")
-                .help("File name of CSV-format sample sheet")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("progress")
-                .long("progress")
-                .value_name("NSEQS")
-                .help("Report progress every NSEQS sequences")
-                .takes_value(true),
-        )
-        .arg(Arg::with_name("input").multiple(true).required(true))
-        .get_matches();
-
-    let linker_spec = LinkerSpec::new(
-        matches.value_of("prefix").unwrap(),
-        matches.value_of("suffix").unwrap(),
-    )?;
-    let index_length = linker_spec.sample_index_length();
-
-    let output_dir = PathBuf::from(matches.value_of("output_dir").unwrap());
-    fs::DirBuilder::new()
-        .recursive(true)
-        .create(output_dir.as_path())?;
-
-    let unknown_sample = Sample::new(
-        "UnknownIndex".to_string(),
-        vec![b'N'; index_length],
-        create_writer(&output_dir, "UnknownIndex")?,
-    );
-
-    let mut sample_map = SampleMap::new(index_length, unknown_sample);
-
-    let sample_sheet_txt = fs::read_to_string(matches.value_of("sample_sheet").unwrap())?;
-    for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
-        let output_file = create_writer(&output_dir, &name)?;
-        let sample = Sample::new(
-            name.to_string(),
-            index.to_string().into_bytes(),
-            output_file,
-        );
-        sample_map.insert(index.into_bytes(), true, sample)?;
-    }
-
-    let short_file = fastq::Writer::new(create_writer(&output_dir, "tooshort")?);
-
-    let mut mapping_file = output_dir.clone();
-    mapping_file.push("mapping.txt");
-    fs::write(&mapping_file, sample_map.mapping_table())?;
-
-    Ok(Config {
-        fastx_inputs: matches
-            .values_of_lossy("input")
-            .unwrap()
-            .into_iter()
-            .map(PathBuf::from)
-            .collect(),
-        output_dir: output_dir,
-        min_insert: value_t!(matches.value_of("min_insert"), usize)?,
-        linker_spec: linker_spec,
-        sample_map: sample_map,
-        short_file: short_file,
-        progress: None,
-    })
-}
-
-fn create_writer(
-    output_dir: &Path,
-    name: &str,
-) -> Result<fs::File, failure::Error> {
-    let mut output_path = output_dir.to_path_buf();
-    output_path.push(Path::new(name));
-    output_path.set_extension("fastq");
-    fs::File::create(output_path.as_path()).map_err(::std::convert::Into::into)
 }
