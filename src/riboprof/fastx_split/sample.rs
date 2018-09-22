@@ -143,7 +143,7 @@ mod tests {
     use std::ops::*;
     use std::rc::*;
 
-    use linkers::*;
+    use fastx_split::linkers::*;
 
     struct TestWriter {
         dest: Rc<RefCell<Vec<u8>>>,
