@@ -6,3 +6,4 @@ extern crate bio;
 
 pub mod codon_assign;
 pub mod fastx_split;
+pub mod metagene;
