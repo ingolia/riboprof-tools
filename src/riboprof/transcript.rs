@@ -1,34 +1,43 @@
 use std::cmp::{min,max};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt; 
+use std::hash::Hash;
 use std::num::ParseIntError;
-use std::ops::Range;
-use std::rc::Rc;
+use std::ops::{Deref, Range};
 
-use bio_types::annot::contig::*;
 use bio_types::annot::loc::Loc;
 use bio_types::annot::pos::*;
 use bio_types::annot::refids::RefIDSet;
 use bio_types::annot::spliced::*;
 use bio_types::strand::*;
+use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
 
-use failure;
-
-pub struct Transcript {
-    gene: Rc<String>,
-    trx: Rc<String>,
-    loc: Spliced<Rc<String>, ReqStrand>,
+pub struct Transcript<R> {
+    gene: R,
+    trx: R,
+    loc: Spliced<R, ReqStrand>,
     cds: Option<Range<usize>>,
 }
 
-impl Transcript {
+impl <R> Transcript<R> {
+    pub fn loc(&self) -> &Spliced<R, ReqStrand> { &self.loc }
+    pub fn cds_range(&self) -> &Option<Range<usize>> { &self.cds }
+}
+
+impl <R> Transcript<R>
+    where R: Deref<Target = String>
+{
     pub fn gene(&self) -> &str { &self.gene }
     pub fn trx(&self) -> &str { &self.trx }
-    pub fn loc(&self) -> &Spliced<Rc<String>, ReqStrand> { &self.loc }
-    pub fn cds_range(&self) -> &Option<Range<usize>> { &self.cds }
 
-    pub fn from_bed12(record: &bed::Record, refids: &mut RefIDSet<Rc<String>>) -> Result<Self, TrxError> {
+}
+
+impl <R> Transcript<R>
+    where R: Deref<Target = String> + From<String> + Eq + Clone
+{
+    pub fn from_bed12(record: &bed::Record, refids: &mut RefIDSet<R>) -> Result<Self, TrxError> {
         let loc = Self::loc_from_bed(record, refids)?;
         let cds = Self::cds_from_bed(record, &loc)?;
         let name = record.name().ok_or_else(|| TrxError::bed(record, "No name"))?;
@@ -43,7 +52,7 @@ impl Transcript {
     const BLOCK_SIZES_COL: usize = 10;
     const BLOCK_STARTS_COL: usize = 11;
 
-    fn loc_from_bed(record: &bed::Record, refids: &mut RefIDSet<Rc<String>>) -> Result<Spliced<Rc<String>, ReqStrand>, TrxError> {
+    fn loc_from_bed(record: &bed::Record, refids: &mut RefIDSet<R>) -> Result<Spliced<R, ReqStrand>, TrxError> {
         let block_count = record.aux(Self::BLOCK_COUNT_COL)
             .ok_or_else(|| TrxError::bed(record, "No splicing blocks"))?
             .parse::<usize>()
@@ -82,7 +91,7 @@ impl Transcript {
             .map_err(|err| TrxError::BedSplicing(format!("Splicing error on record {:?}", record), err))
     }
     
-    fn cds_from_bed(record: &bed::Record, loc: &Spliced<Rc<String>, ReqStrand>) -> Result<Option<Range<usize>>, TrxError> {
+    fn cds_from_bed(record: &bed::Record, loc: &Spliced<R, ReqStrand>) -> Result<Option<Range<usize>>, TrxError> {
         let thick_start = match record.aux(Self::THICK_START_COL) {
             Some(start_str) => start_str.parse::<usize>()
                 .map_err(|err| TrxError::bed_parse(record, "thickStart", err))?,
@@ -118,11 +127,50 @@ impl Transcript {
     }
 }
 
+pub struct Transcriptome<R>
+    where R: Eq + Hash
+{
+    gene_to_trxs: HashMap<R,Vec<R>>,
+    trx_to_gene: HashMap<R,R>,
+    trx_to_transcript: HashMap<R,Transcript<R>>,
+    trx_by_location: AnnotMap<R,R>
+}
+
+impl <R: Eq + Hash> Transcriptome<R> {
+    pub fn new() -> Self {
+        Transcriptome { gene_to_trxs: HashMap::new(),
+                        trx_to_gene: HashMap::new(),
+                        trx_to_transcript: HashMap::new(),
+                        trx_by_location: AnnotMap::new() }
+    }
+}
+
+impl <R> Transcriptome<R>
+    where R: Deref<Target = String> + From<String> + Clone + Hash + Eq
+{
+    pub fn insert(&mut self, transcript: Transcript<R>) -> Result<R, TrxError> {
+        if self.trx_to_transcript.contains_key(&transcript.trx) {
+            return Err(TrxError::TrxExists(transcript.trx.to_string()));
+        }
+
+        let trx = transcript.trx.clone();
+
+        self.trx_to_gene.insert(trx.clone(), transcript.gene.clone());
+        self.gene_to_trxs.entry(transcript.gene.clone()).or_insert(vec![]).push(trx.clone());
+        self.trx_by_location.insert_at(trx.clone(), &transcript.loc);
+
+        self.trx_to_transcript.insert(trx.clone(), transcript);
+
+        Ok(trx)
+    }
+}
+
 #[derive(Debug)]
 pub enum TrxError {
     Bed(String),
     BedParse(String, ParseIntError),
     BedSplicing(String, SplicingError),
+    TrxExists(String),
 }
 
 impl TrxError {
@@ -146,6 +194,7 @@ impl fmt::Display for TrxError {
             TrxError::Bed(msg) => write!(f, "BED record to transcript: {}", msg),
             TrxError::BedParse(msg, err) => write!(f, "BED record to transcript: {}: parsing error {}", msg, err),
             TrxError::BedSplicing(msg, err) => write!(f, "BED record to transcript: {}: splicing error {}", msg, err),
+            TrxError::TrxExists(trx) => write!(f, "Transcript already exists: {}", trx),
         }
     }
 }
