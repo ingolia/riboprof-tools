@@ -17,6 +17,10 @@ use bio_types::strand::*;
 
 use failure;
 
+/// Annotation of a transcript as a `Spliced` `annot` location.
+///
+/// The transcript is associated with a gene (one gene may have
+/// multiple transcripts) and has an optional coding sequence.
 pub struct Transcript<R> {
     gene: R,
     trxname: R,
@@ -24,10 +28,15 @@ pub struct Transcript<R> {
     cds: Option<Range<usize>>,
 }
 
+
 impl<R> Transcript<R> {
+    /// Returns the spliced location of the transcript.
     pub fn loc(&self) -> &Spliced<R, ReqStrand> {
         &self.loc
     }
+
+    /// Returns the (optional) coding sequence in transcript
+    /// coordinates.
     pub fn cds_range(&self) -> &Option<Range<usize>> {
         &self.cds
     }
@@ -37,9 +46,12 @@ impl<R> Transcript<R>
 where
     R: Deref<Target = String>,
 {
+    /// Returns the gene name for the transcript
     pub fn gene(&self) -> &str {
         &self.gene
     }
+
+    /// Returns the name of the transcript
     pub fn trxname(&self) -> &str {
         &self.trxname
     }
@@ -49,6 +61,27 @@ impl<R> Transcript<R>
 where
     R: Deref<Target = String> + From<String> + Eq + Clone,
 {
+    /// Construct a transcirpt from a 12-column BED annotation.
+    /// 
+    /// The gene and transcript name are both taken from the BED name
+    /// entry, which is required. The overall transcript annotation is
+    /// determined from the BED location and strand information along
+    /// with the exon "blocks" location in columns 10 through 12. The
+    /// CDS is determined by the "thickStart" and "thickEnd"
+    /// entries; if these are equal, then the CDS is `None.`
+    ///
+    /// # Arguments
+    ///
+    /// `record` is a BED format record containing the annotation information
+    ///
+    /// `refids` is a table of interned strings used for the gene and
+    /// transcript name, along with the reference sequence
+    /// (chromosome) name.
+    ///
+    /// # Errors
+    ///
+    /// An error variant is returned when required information is
+    /// missing, unparseable, or inconsistent.
     pub fn from_bed12(record: &bed::Record, refids: &mut RefIDSet<R>) -> Result<Self, TrxError> {
         let loc = Self::loc_from_bed(record, refids)?;
         let cds = Self::cds_from_bed(record, &loc)?;
@@ -151,26 +184,30 @@ where
             return Ok(None);
         }
 
+        let left_pos = loc.pos_into(&Pos::new( loc.refid().clone(),
+            thick_start as isize, loc.strand(), )).ok_or_else(||
+            TrxError::bed(record, "thickStart not in annot"))?.pos();
+
         // thick_end position is outside of loc when CDS extends to
         // the end of the transcript. The last position is guaranteed
-        // to be exonic (not intronic), so work with thick_end - 1.
-
-        let left_pos =
-            loc.pos_into(&Pos::new(
-                loc.refid().clone(),
-                thick_start as isize,
-                loc.strand(),
-            )).ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?;
-
-        let right_pos =
+        // to be exonic (not intronic), so work with thick_end - 1
+        // when this arises.
+        let right_pos = if let Some(pos) = loc.pos_into(&Pos::new(
+            loc.refid().clone(),
+            thick_end as isize,
+            loc.strand(),
+            )) {
+            pos.pos() - 1
+        } else {
             loc.pos_into(&Pos::new(
                 loc.refid().clone(),
                 thick_end as isize - 1,
                 loc.strand(),
-            )).ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?;
+            )).ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?.pos()
+        };
 
-        let start = min(left_pos.pos(), right_pos.pos()) as usize;
-        let last = max(left_pos.pos(), right_pos.pos()) as usize;
+        let start = min(left_pos, right_pos) as usize;
+        let last = max(left_pos, right_pos) as usize;
 
         assert!(last >= start);
 
