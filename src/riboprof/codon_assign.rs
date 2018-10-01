@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::fmt;
 use std::fs;
-use std::path::Path;
 use std::num::ParseIntError;
+use std::path::Path;
 use std::str::FromStr;
 
 use failure;
@@ -16,7 +16,7 @@ use bio_types::strand::*;
 /// length.
 #[derive(Debug, Clone)]
 pub struct ASites {
-    a_site_offsets: Vec<Option<usize>>
+    a_site_offsets: Vec<Option<usize>>,
 }
 
 impl ASites {
@@ -61,11 +61,15 @@ impl ASites {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub fn offset(&self, len: usize) -> Option<usize> {
-        self.a_site_offsets.get(len).unwrap_or(&None).as_ref().map(|o| *o)
+        self.a_site_offsets
+            .get(len)
+            .unwrap_or(&None)
+            .as_ref()
+            .map(|o| *o)
     }
 
     /// Returns the A site position from a footprint location.
-    /// 
+    ///
     /// # Arguments
     ///
     /// `fp` is the location of a footprint fragment
@@ -89,11 +93,14 @@ impl ASites {
     /// # fn main() { try_main().unwrap(); }
     /// ```
     pub fn a_site<L>(&self, fp: L) -> Option<Pos<L::RefID, ReqStrand>>
-        where L: Loc, L::Strand: Into<ReqStrand> + Copy, L::RefID: Clone
+    where
+        L: Loc,
+        L::Strand: Into<ReqStrand> + Copy,
+        L::RefID: Clone,
     {
         match self.offset(fp.length()) {
             Some(offset) => fp.pos_outof(&Pos::new((), offset as isize, ReqStrand::Forward)),
-            None => None
+            None => None,
         }
     }
 }
@@ -106,17 +113,25 @@ impl FromStr for ASites {
         let re = Regex::new("^(\\d+)\t(\\d+)$").unwrap();
 
         for line in table.lines().map(str::trim_right) {
-            let cap = re.captures(line).ok_or_else(|| ASiteParseError::BadLine(line.to_string()))?;
-            let len = cap[1].parse::<usize>().map_err(|e| ASiteParseError::BadLength(e, cap[1].to_owned()))?;
-            let off = cap[2].parse::<usize>().map_err(|e| ASiteParseError::BadOffset(e, cap[1].to_owned()))?;
-            
+            let cap = re
+                .captures(line)
+                .ok_or_else(|| ASiteParseError::BadLine(line.to_string()))?;
+            let len = cap[1]
+                .parse::<usize>()
+                .map_err(|e| ASiteParseError::BadLength(e, cap[1].to_owned()))?;
+            let off = cap[2]
+                .parse::<usize>()
+                .map_err(|e| ASiteParseError::BadOffset(e, cap[1].to_owned()))?;
+
             while offsets.len() <= len {
                 offsets.push(None);
             }
             offsets[len] = Some(off);
         }
 
-        Ok( ASites{ a_site_offsets: offsets } )
+        Ok(ASites {
+            a_site_offsets: offsets,
+        })
     }
 }
 
@@ -127,17 +142,18 @@ pub enum ASiteParseError {
     BadOffset(ParseIntError, String),
 }
 
-impl Error for ASiteParseError {
-
-}
+impl Error for ASiteParseError {}
 
 impl fmt::Display for ASiteParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error>
-    {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             ASiteParseError::BadLine(line) => write!(f, "Bad A sites line: \"{}\"", &line),
-            ASiteParseError::BadLength(err, line) => write!(f, "Error parsing length \"{}\": {}", line, err),
-            ASiteParseError::BadOffset(err, line) => write!(f, "Error parsing offset \"{}\": {}", line, err),
+            ASiteParseError::BadLength(err, line) => {
+                write!(f, "Error parsing length \"{}\": {}", line, err)
+            }
+            ASiteParseError::BadOffset(err, line) => {
+                write!(f, "Error parsing offset \"{}\": {}", line, err)
+            }
         }
     }
 }

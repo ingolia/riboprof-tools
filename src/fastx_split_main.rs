@@ -99,4 +99,3 @@ fn get_cli() -> Result<CLI, failure::Error> {
         progress: value_t!(matches.value_of("progress"), usize)?,
     })
 }
-
