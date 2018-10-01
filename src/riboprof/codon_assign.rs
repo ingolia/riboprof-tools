@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt;
 use std::fs;
-use std::ops::Deref;
 use std::path::Path;
 use std::num::ParseIntError;
 use std::str::FromStr;
