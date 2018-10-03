@@ -21,13 +21,15 @@ use failure;
 ///
 /// The transcript is associated with a gene (one gene may have
 /// multiple transcripts) and has an optional coding sequence.
+///
+/// Parameterized over the data type used for identifiers (e.g.,
+/// `String`, `Rc<String>`, or `Arc<String>`).
 pub struct Transcript<R> {
     gene: R,
     trxname: R,
     loc: Spliced<R, ReqStrand>,
     cds: Option<Range<usize>>,
 }
-
 
 impl<R> Transcript<R> {
     /// Returns the spliced location of the transcript.
@@ -44,8 +46,44 @@ impl<R> Transcript<R> {
 
 impl<R> Transcript<R>
 where
-    R: Deref<Target = String>,
+    R: Deref<Target = String> + fmt::Debug,
 {
+    /// Returns a new `Transcript`.
+    ///
+    /// # Arguments
+    ///
+    /// * `gene` is the gene identifier for the annotation
+    /// * `trxname` is the transcript identifier for the annotation
+    /// * `loc` is the transcript annotation
+    /// * `cds` is an optional coding sequence position, as a range of loc.
+    ///
+    /// # Errors
+    ///
+    /// An error variant is returned if a CDS is given and the `end`
+    /// of the range is beyond `loc.length()` (or less than `start`).
+    pub fn new(
+        gene: R,
+        trxname: R,
+        loc: Spliced<R, ReqStrand>,
+        cds: Option<Range<usize>>,
+    ) -> Result<Self, TrxError> {
+        if cds.as_ref().map_or(false, |rng| rng.end <= rng.start) {
+            Err(TrxError::Cds(format!("Invalid CDS range {:?}", cds)))
+        } else if cds.as_ref().map_or(false, |rng| rng.end > loc.length()) {
+            Err(TrxError::Cds(format!(
+                "CDS range {:?} extends beyond end of transcript {:?}",
+                cds, loc
+            )))
+        } else {
+            Ok(Transcript {
+                gene: gene,
+                trxname: trxname,
+                loc: loc,
+                cds: cds,
+            })
+        }
+    }
+
     /// Returns the gene name for the transcript
     pub fn gene(&self) -> &str {
         &self.gene
@@ -62,7 +100,7 @@ where
     R: Deref<Target = String> + From<String> + Eq + Clone,
 {
     /// Construct a transcirpt from a 12-column BED annotation.
-    /// 
+    ///
     /// The gene and transcript name are both taken from the BED name
     /// entry, which is required. The overall transcript annotation is
     /// determined from the BED location and strand information along
@@ -184,26 +222,32 @@ where
             return Ok(None);
         }
 
-        let left_pos = loc.pos_into(&Pos::new( loc.refid().clone(),
-            thick_start as isize, loc.strand(), )).ok_or_else(||
-            TrxError::bed(record, "thickStart not in annot"))?.pos();
+        // Left-most position within the location
+        let left_pos =
+            loc.pos_into(&Pos::new(
+                loc.refid().clone(),
+                thick_start as isize,
+                loc.strand(),
+            )).ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?
+                .pos();
 
-        // thick_end position is outside of loc when CDS extends to
-        // the end of the transcript. The last position is guaranteed
-        // to be exonic (not intronic), so work with thick_end - 1
-        // when this arises.
+        // Right-most position within the location
         let right_pos = if let Some(pos) = loc.pos_into(&Pos::new(
             loc.refid().clone(),
             thick_end as isize,
             loc.strand(),
-            )) {
-            pos.pos() - 1
+        )) {
+            match loc.strand() {
+                ReqStrand::Forward => pos.pos() - 1,
+                ReqStrand::Reverse => pos.pos() + 1,
+            }
         } else {
             loc.pos_into(&Pos::new(
                 loc.refid().clone(),
                 thick_end as isize - 1,
                 loc.strand(),
-            )).ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?.pos()
+            )).ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?
+                .pos()
         };
 
         let start = min(left_pos, right_pos) as usize;
@@ -246,13 +290,11 @@ impl<R: Eq + Hash> Transcriptome<R> {
         &'a self,
         loc: &'b L,
     ) -> impl Iterator<Item = &'c Transcript<R>> {
-        self.trxname_by_location
-            .find(loc)
-            .map(move |ent| {
-                self.trxname_to_transcript
-                    .get(ent.data())
-                    .expect("transcript missing from map")
-            })
+        self.trxname_by_location.find(loc).map(move |ent| {
+            self.trxname_to_transcript
+                .get(ent.data())
+                .expect("transcript missing from map")
+        })
     }
 }
 
@@ -304,6 +346,7 @@ pub enum TrxError {
     BedParse(String, ParseIntError),
     BedRead(failure::Error),
     BedSplicing(String, SplicingError),
+    Cds(String),
     TrxExists(String),
 }
 
@@ -337,7 +380,98 @@ impl fmt::Display for TrxError {
                 "BED record to transcript: {}: splicing error {}",
                 msg, err
             ),
+            TrxError::Cds(msg) => write!(f, "CDS on transcript: {}", msg),
             TrxError::TrxExists(trx) => write!(f, "Transcript already exists: {}", trx),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate csv;
+
+    use super::*;
+
+    use std::cell::*;
+    use std::ops::*;
+    use std::rc::*;
+
+    use self::csv::Error;
+
+    struct TestWriter {
+        dest: Rc<RefCell<Vec<u8>>>,
+    }
+
+    impl io::Write for TestWriter {
+        fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+            self.dest.borrow_mut().append(&mut buf.to_vec());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> Result<(), io::Error> {
+            Ok(())
+        }
+    }
+
+    fn records_from_str(recstr: &str) -> Vec<bed::Record> {
+        bed::Reader::new(recstr.as_bytes())
+            .records()
+            .collect::<Result<Vec<bed::Record>, csv::Error>>()
+            .expect("Reading record string")
+    }
+
+    #[test]
+    fn gene_1exon_fwd() {
+        let recstr = "chr01	334	649	YAL069W	0	+	334	649	0	1	315,	0,\n";
+        let recs = records_from_str(&recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        assert_eq!(trx.gene(), "YAL069W");
+        assert_eq!(trx.loc().to_string(), "chr01:334-649(+)");
+        assert_eq!(trx.cds_range(), &Some(0..315));
+    }
+
+    #[test]
+    fn gene_1exon_rev() {
+        let recstr = "chr01	1806	2169	YAL068C	0	-	1806	2169	0	1	363,	0,\n";
+        let recs = records_from_str(&recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        assert_eq!(trx.gene(), "YAL068C");
+        assert_eq!(trx.loc().to_string(), "chr01:1806-2169(-)");
+        assert_eq!(trx.cds_range(), &Some(0..363));
+    }        
+
+    #[test]
+    fn gene_1exon_fwd_cds() {
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
+        let recs = records_from_str(&recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        assert_eq!(trx.gene(), "YAL061W");
+        assert_eq!(trx.loc().to_string(), "chr01:33364-34785(+)");        
+        assert_eq!(trx.cds_range(), &Some(83..1337));
+    }
+
+    #[test]
+    fn gene_1exon_rev_cds() {
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
+        let recs = records_from_str(&recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        assert_eq!(trx.gene(), "YAL049C");
+        assert_eq!(trx.loc().to_string(), "chr01:51775-52696(-)");        
+        assert_eq!(trx.cds_range(), &Some(101..842));        
+    }
+
+    #[test]
+    fn gene_2exon_fwd() {
+        let recstr = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,";
+        let recs = records_from_str(&recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        assert_eq!(trx.gene(), "YAL030W");
+        assert_eq!(trx.loc().to_string(), "chr01:87261-87387;87500-87822(+)");
+//        assert_eq!(trx.cds(), Some(24..
+    }        
 }
