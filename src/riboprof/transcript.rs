@@ -499,10 +499,25 @@ mod tests {
 
     #[test]
     fn gene_2exon_fwd() {
-        let recstr = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,";
+        let recstr = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,\n";
         let trx = transcript_from_str(&recstr);
         assert_eq!(trx.gene(), "YAL030W");
         assert_eq!(trx.loc().to_string(), "chr01:87261-87387;87500-87822(+)");
-//        assert_eq!(trx.cds(), Some(24..
+        assert_eq!(trx.cds_range(), &Some(24..378));
     }        
+
+    #[test]
+    fn gene_2exon_rev() {
+        let recstr = "chr02	2906	5009	YBL111C	0	-	2906	5009	0	2	1210,794,	0,1309,\n";
+        let trx = transcript_from_str(&recstr);
+        assert_eq!(trx.gene(), "YBL111C");
+        assert_eq!(trx.loc().to_string(), "chr02:2906-4116;4215-5009(-)");
+        assert_eq!(trx.cds_range(), &Some(0..2004));
+
+        let recstr = "chr02	59630	60828	YBL087C	0	-	59821	60739	0	2	563,131,	0,1067,\n";
+        let trx = transcript_from_str(&recstr);
+        assert_eq!(trx.gene(), "YBL087C");
+        assert_eq!(trx.loc().to_string(), "chr02:59630-60193;60697-60828(-)");
+        assert_eq!(trx.cds_range(), &Some(89..503));
+    }
 }
