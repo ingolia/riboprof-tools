@@ -413,19 +413,32 @@ mod tests {
         }
     }
 
-    fn records_from_str(recstr: &str) -> Vec<bed::Record> {
+    fn record_from_str(recstr: &str) -> bed::Record {
         bed::Reader::new(recstr.as_bytes())
             .records()
-            .collect::<Result<Vec<bed::Record>, csv::Error>>()
+            .next()
             .expect("Reading record string")
+            .expect("No record read")
+//            .collect::<Result<Vec<bed::Record>, csv::Error>>()
+//            .expect("Reading record string")
+    }
+
+    fn transcript_from_str(recstr: &str) -> Transcript<Rc<String>> {
+        let rec = record_from_str(recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        Transcript::from_bed12(&rec, &mut refids).expect("Converting to transcript")
+    }
+
+    fn no_transcript_from_str(recstr: &str) -> bool {
+        let rec = record_from_str(recstr);
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        Transcript::from_bed12(&rec, &mut refids).is_err()
     }
 
     #[test]
     fn gene_1exon_fwd() {
         let recstr = "chr01	334	649	YAL069W	0	+	334	649	0	1	315,	0,\n";
-        let recs = records_from_str(&recstr);
-        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
-        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        let trx = transcript_from_str(recstr);
         assert_eq!(trx.gene(), "YAL069W");
         assert_eq!(trx.loc().to_string(), "chr01:334-649(+)");
         assert_eq!(trx.cds_range(), &Some(0..315));
@@ -434,9 +447,7 @@ mod tests {
     #[test]
     fn gene_1exon_rev() {
         let recstr = "chr01	1806	2169	YAL068C	0	-	1806	2169	0	1	363,	0,\n";
-        let recs = records_from_str(&recstr);
-        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
-        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        let trx = transcript_from_str(recstr);
         assert_eq!(trx.gene(), "YAL068C");
         assert_eq!(trx.loc().to_string(), "chr01:1806-2169(-)");
         assert_eq!(trx.cds_range(), &Some(0..363));
@@ -445,20 +456,29 @@ mod tests {
     #[test]
     fn gene_1exon_fwd_cds() {
         let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
-        let recs = records_from_str(&recstr);
-        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
-        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        let trx = transcript_from_str(recstr);
         assert_eq!(trx.gene(), "YAL061W");
         assert_eq!(trx.loc().to_string(), "chr01:33364-34785(+)");        
         assert_eq!(trx.cds_range(), &Some(83..1337));
+        // CDS alternatives
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33364	34701	0	1	1421,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(0..1337));
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33365	34701	0	1	1421,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(1..1337));
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33363	34701	0	1	1421,	0,\n";
+        assert!(no_transcript_from_str(recstr));
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34785	0	1	1421,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(83..1421));
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34784	0	1	1421,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(83..1420));
+        let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34786	0	1	1421,	0,\n";
+        assert!(no_transcript_from_str(recstr));
     }
 
     #[test]
     fn gene_1exon_rev_cds() {
         let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
-        let recs = records_from_str(&recstr);
-        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
-        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        let trx = transcript_from_str(&recstr);
         assert_eq!(trx.gene(), "YAL049C");
         assert_eq!(trx.loc().to_string(), "chr01:51775-52696(-)");        
         assert_eq!(trx.cds_range(), &Some(101..842));        
@@ -467,9 +487,7 @@ mod tests {
     #[test]
     fn gene_2exon_fwd() {
         let recstr = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,";
-        let recs = records_from_str(&recstr);
-        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
-        let trx = Transcript::from_bed12(&recs[0], &mut refids).expect("Converting to transcript");
+        let trx = transcript_from_str(&recstr);
         assert_eq!(trx.gene(), "YAL030W");
         assert_eq!(trx.loc().to_string(), "chr01:87261-87387;87500-87822(+)");
 //        assert_eq!(trx.cds(), Some(24..
