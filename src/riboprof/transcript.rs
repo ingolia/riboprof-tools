@@ -482,6 +482,19 @@ mod tests {
         assert_eq!(trx.gene(), "YAL049C");
         assert_eq!(trx.loc().to_string(), "chr01:51775-52696(-)");        
         assert_eq!(trx.cds_range(), &Some(101..842));        
+        // CDS alternatives
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52696	0	1	921,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(0..842));
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52695	0	1	921,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(1..842));
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52697	0	1	921,	0,\n";
+        assert!(no_transcript_from_str(recstr));
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51775	52595	0	1	921,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(101..921));
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51776	52595	0	1	921,	0,\n";
+        assert_eq!(transcript_from_str(recstr).cds_range(), &Some(101..920));
+        let recstr = "chr01	51775	52696	YAL049C	0	-	51774	52595	0	1	921,	0,\n";
+        assert!(no_transcript_from_str(recstr));
     }
 
     #[test]
