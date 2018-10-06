@@ -46,6 +46,21 @@ impl<R> Transcript<R> {
 
 impl<R> Transcript<R>
 where
+    R: Deref<Target = String>
+{
+    /// Returns the gene name for the transcript
+    pub fn gene(&self) -> &str {
+        &self.gene
+    }
+
+    /// Returns the name of the transcript
+    pub fn trxname(&self) -> &str {
+        &self.trxname
+    }
+}
+
+impl<R> Transcript<R>
+where
     R: Deref<Target = String> + fmt::Debug,
 {
     /// Returns a new `Transcript`.
@@ -82,16 +97,6 @@ where
                 cds: cds,
             })
         }
-    }
-
-    /// Returns the gene name for the transcript
-    pub fn gene(&self) -> &str {
-        &self.gene
-    }
-
-    /// Returns the name of the transcript
-    pub fn trxname(&self) -> &str {
-        &self.trxname
     }
 }
 
@@ -520,5 +525,51 @@ mod tests {
         assert_eq!(trx.gene(), "YBL087C");
         assert_eq!(trx.loc().to_string(), "chr02:59630-60193;60697-60828(-)");
         assert_eq!(trx.cds_range(), &Some(89..503));
+    }
+
+    fn transcriptome_from_str(bedstr: &str) -> Transcriptome<Rc<String>> {
+        let mut refids = RefIDSet::new();
+        Transcriptome::new_from_bed(bed::Reader::new(bedstr.as_bytes()).records(), &mut refids).expect("Transcriptome from string")
+    }
+
+    fn transcripts_at_pos<R>(tome: &Transcriptome<R>, posstr: &str) -> Vec<String> 
+        where R: Hash + Eq + Deref<Target = String> + From<String>
+    {
+        let pos: Pos<R,ReqStrand> = posstr.parse().expect("Parsing position");
+        let mut trxs: Vec<String> = tome.find_at_loc(&pos).map(|trx| trx.trxname().deref().to_string()).collect();
+        trxs.sort();
+        trxs
+    }
+
+    #[test]
+    fn transcriptome_find() {
+        let beds = "\
+chr01	1000	2000	AAA	0	+	1200	1800	0	1	1000,	0,
+chr01	1900	2100	BBB	0	+	1950	2050	0	1	200,	0,
+chr02	1500	2500	CCC	0	+	1600	2400	0	1	1000,	0,
+chr02	2100	2600	DDD	0	-	2200	2500	0	1	500,	0,
+chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
+";
+        let tome = transcriptome_from_str(&beds);
+
+        let none: Vec<String> = vec![];
+
+        assert_eq!(transcripts_at_pos(&tome, "chr01:750(+)"), none);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:999(+)"), none);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:1000(+)"), vec!["AAA"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:1234(+)"), vec!["AAA"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:1950(+)"), vec!["AAA", "BBB"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:1999(+)"), vec!["AAA", "BBB"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:2000(+)"), vec!["BBB"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:2050(+)"), vec!["BBB"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:2099(+)"), vec!["BBB"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:2100(+)"), none);
+        assert_eq!(transcripts_at_pos(&tome, "chr01:2101(+)"), none);
+
+        assert_eq!(transcripts_at_pos(&tome, "chr02:2000(+)"), vec!["CCC"]);
+
+        assert_eq!(transcripts_at_pos(&tome, "chr03:550(+)"), vec!["EEE"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr03:850(+)"), vec!["EEE"]);
+        assert_eq!(transcripts_at_pos(&tome, "chr03:1450(+)"), vec!["EEE"]);
     }
 }
