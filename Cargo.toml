@@ -23,3 +23,7 @@ path = "src/riboprof/lib.rs"
 [[bin]]
 name = "fastx-split"
 path = "src/fastx_split_main.rs"
+
+[[bin]]
+name = "fp-framing"
+path = "src/fp_framing_main.rs"

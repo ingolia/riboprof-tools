@@ -25,7 +25,7 @@ fn main() {
 fn wrapper() -> Result<(), failure::Error> {
     let cli = get_cli()?;
     let config = Config::new(&cli)?;
-    fastx_split(config)
+    fp_framing(config)
 }
 
 fn get_cli() -> Result<CLI, failure::Error> {
@@ -89,6 +89,12 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .default_value("26,34"),
         )
         .arg(
+            Arg::with_name("count-multi")
+                .short("m")
+                .long("count-multi")
+                .help("Count multi-mapping reads once, at their first occurrence (i.e., HI = 0)")
+        )
+        .arg(
             Arg::with_name("annotate")
                 .short("a")
                 .long("annotate")
@@ -96,18 +102,17 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .help("Write output BAM file annotated wiht framing information")
                 .takes_value(true)
         )
-        
         .arg(Arg::with_name("input").value_name("INPUT.BAM").required(true))
         .get_matches();
-
-    /// ZZZ
+    
     Ok(CLI {
-        fastx_inputs: matches.values_of_lossy("input").unwrap(),
-        output_dir: matches.value_of("output_dir").unwrap().to_string(),
-        min_insert: value_t!(matches.value_of("min_insert"), usize)?,
-        prefix: matches.value_of("prefix").unwrap().to_string(),
-        suffix: matches.value_of("suffix").unwrap().to_string(),
-        sample_sheet: matches.value_of("sample_sheet").unwrap().to_string(),
-        progress: value_t!(matches.value_of("progress"), usize)?,
+        output: matches.value_of("output").unwrap().to_string(),
+        bed: matches.value_of("bed").unwrap().to_string(),
+        genes: matches.values_of_lossy("genes").unwrap_or_else(|| Vec::new()),
+        flanking: matches.value_of("flanking").unwrap().to_string(),
+        cdsbody: matches.value_of("cdsbody").unwrap().to_string(),
+        lengths: matches.value_of("lengths").unwrap().to_string(),
+        count_multi: matches.is_present("count-multi"),
+        annotate: matches.value_of_lossy("annotate").map(|a| a.to_string()),
     })
 }
