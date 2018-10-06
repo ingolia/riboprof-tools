@@ -12,6 +12,66 @@ use bio_types::annot::loc::*;
 use bio_types::annot::pos::*;
 use bio_types::strand::*;
 
+use transcript::Transcript;
+
+pub struct TrxPos<'a, R: 'a> {
+    transcript: &'a Transcript<R>,
+    pos: usize,
+}
+
+impl<'a, R: 'a> TrxPos<'a, R> {
+    pub fn new(transcript: &'a Transcript<R>, pos: usize) -> Self {
+        TrxPos {
+            transcript: transcript,
+            pos: pos,
+        }
+    }
+
+    pub fn transcript(&self) -> &'a Transcript<R> {
+        self.transcript
+    }
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+
+    pub fn offset_from_trx_start(&self) -> isize {
+        self.pos as isize
+    }
+    pub fn offset_from_trx_end(&self) -> isize {
+        self.transcript.loc().length() as isize - self.pos as isize
+    }
+
+    pub fn offset_from_cds_start(&self) -> Option<isize> {
+        self.transcript
+            .cds_range()
+            .as_ref()
+            .map(|cds| cds.start as isize - self.pos as isize)
+    }
+
+    pub fn offset_from_cds_end(&self) -> Option<isize> {
+        self.transcript
+            .cds_range()
+            .as_ref()
+            .map(|cds| cds.end as isize - self.pos as isize)
+    }
+}
+
+impl<'a, R: 'a + Eq> TrxPos<'a, R> {
+    pub fn from_genomic_pos(
+        transcript: &'a Transcript<R>,
+        gpos: &Pos<R, ReqStrand>,
+    ) -> Option<Self> {
+        transcript
+            .loc()
+            .pos_into(gpos)
+            .map_or(None, |tpos| match tpos.strand() {
+                ReqStrand::Forward => Some(tpos.pos()),
+                ReqStrand::Reverse => None,
+            })
+            .map(|pos| Self::new(transcript, pos as usize))
+    }
+}
+
 /// Mapping of A site positions within a footprint, based on fragment
 /// length.
 #[derive(Debug, Clone)]

@@ -231,7 +231,8 @@ where
             )).ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?
                 .pos();
 
-        // Right-most position within the location
+        // Right-most position _within_ the location
+        // When CDS extends to right edge of transcript, then thickEnd is _outside_
         let right_pos = if let Some(pos) = loc.pos_into(&Pos::new(
             loc.refid().clone(),
             thick_end as isize,
@@ -419,8 +420,8 @@ mod tests {
             .next()
             .expect("Reading record string")
             .expect("No record read")
-//            .collect::<Result<Vec<bed::Record>, csv::Error>>()
-//            .expect("Reading record string")
+        //            .collect::<Result<Vec<bed::Record>, csv::Error>>()
+        //            .expect("Reading record string")
     }
 
     fn transcript_from_str(recstr: &str) -> Transcript<Rc<String>> {
@@ -451,14 +452,14 @@ mod tests {
         assert_eq!(trx.gene(), "YAL068C");
         assert_eq!(trx.loc().to_string(), "chr01:1806-2169(-)");
         assert_eq!(trx.cds_range(), &Some(0..363));
-    }        
+    }
 
     #[test]
     fn gene_1exon_fwd_cds() {
         let recstr = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
         let trx = transcript_from_str(recstr);
         assert_eq!(trx.gene(), "YAL061W");
-        assert_eq!(trx.loc().to_string(), "chr01:33364-34785(+)");        
+        assert_eq!(trx.loc().to_string(), "chr01:33364-34785(+)");
         assert_eq!(trx.cds_range(), &Some(83..1337));
         // CDS alternatives
         let recstr = "chr01	33364	34785	YAL061W	0	+	33364	34701	0	1	1421,	0,\n";
@@ -480,8 +481,8 @@ mod tests {
         let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
         let trx = transcript_from_str(&recstr);
         assert_eq!(trx.gene(), "YAL049C");
-        assert_eq!(trx.loc().to_string(), "chr01:51775-52696(-)");        
-        assert_eq!(trx.cds_range(), &Some(101..842));        
+        assert_eq!(trx.loc().to_string(), "chr01:51775-52696(-)");
+        assert_eq!(trx.cds_range(), &Some(101..842));
         // CDS alternatives
         let recstr = "chr01	51775	52696	YAL049C	0	-	51854	52696	0	1	921,	0,\n";
         assert_eq!(transcript_from_str(recstr).cds_range(), &Some(0..842));
@@ -504,7 +505,7 @@ mod tests {
         assert_eq!(trx.gene(), "YAL030W");
         assert_eq!(trx.loc().to_string(), "chr01:87261-87387;87500-87822(+)");
         assert_eq!(trx.cds_range(), &Some(24..378));
-    }        
+    }
 
     #[test]
     fn gene_2exon_rev() {
