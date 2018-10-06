@@ -232,3 +232,94 @@ impl fmt::Display for ASiteParseError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate csv;
+
+    use super::*;
+
+    use std::cell::*;
+    use std::ops::*;
+    use std::rc::*;
+
+    use self::csv::Error;
+
+    use bio::io::bed;
+    use bio_types::annot::refids::*;
+
+    fn transcriptome_from_str(bedstr: &str) -> Transcriptome<Rc<String>> {
+        let mut refids = RefIDSet::new();
+        Transcriptome::new_from_bed(bed::Reader::new(bedstr.as_bytes()).records(), &mut refids)
+            .expect("Transcriptome from string")
+    }
+
+    fn trxpos_at_pos<R>(tome: &Transcriptome<R>, posstr: &str) -> Vec<(String,usize)>
+    where
+        R: Hash + Eq + Deref<Target = String> + From<String>,
+    {
+        let pos: Pos<R, ReqStrand> = posstr.parse().expect("Parsing position");
+        let mut trxposns: Vec<(String,usize)> = 
+            TrxPos::transcriptome_pos(tome, &pos)
+            .map(|trxpos| (trxpos.transcript().trxname().deref().to_string(),trxpos.pos()))
+            .collect();
+        trxposns.sort();
+        trxposns
+    }
+
+    #[test]
+    fn transcriptome_positions() {
+        let beds = "\
+chr01	1000	2000	AAA	0	+	1200	1800	0	1	1000,	0,
+chr01	1900	2100	BBB	0	+	1950	2050	0	1	200,	0,
+chr02	1500	2500	CCC	0	+	1600	2400	0	1	1000,	0,
+chr02	2100	2600	DDD	0	-	2200	2500	0	1	500,	0,
+chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
+";
+        let tome = transcriptome_from_str(&beds);
+
+        let none: Vec<(String,usize)> = Vec::new();
+        let aaa = "AAA".to_string();
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1000(+)"), vec![("AAA".to_string(), 0)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1234(+)"), vec![("AAA".to_string(), 234)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:999(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1000(-)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1234(-)"), none);
+
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1899(+)"), vec![("AAA".to_string(), 899)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1900(+)"), vec![("AAA".to_string(), 900), ("BBB".to_string(), 0)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1901(+)"), vec![("AAA".to_string(), 901), ("BBB".to_string(), 1)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:1999(+)"), vec![("AAA".to_string(), 999), ("BBB".to_string(), 99)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:2000(+)"), vec![("BBB".to_string(), 100)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:2001(+)"), vec![("BBB".to_string(), 101)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:2099(+)"), vec![("BBB".to_string(), 199)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr01:2100(+)"), none);
+
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2000(+)"), vec![("CCC".to_string(), 500)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2200(+)"), vec![("CCC".to_string(), 700)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2400(+)"), vec![("CCC".to_string(), 900)]);
+
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2000(-)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2099(-)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2100(-)"), vec![("DDD".to_string(), 499)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2200(-)"), vec![("DDD".to_string(), 399)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2400(-)"), vec![("DDD".to_string(), 199)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2599(-)"), vec![("DDD".to_string(), 0)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr02:2600(-)"), none);
+        
+        assert_eq!(trxpos_at_pos(&tome, "chr03:499(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:500(+)"), vec![("EEE".to_string(), 0)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:555(+)"), vec![("EEE".to_string(), 55)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:749(+)"), vec![("EEE".to_string(), 249)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:750(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:800(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1000(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1049(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1050(+)"), vec![("EEE".to_string(), 250)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1250(+)"), vec![("EEE".to_string(), 450)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1450(+)"), vec![("EEE".to_string(), 650)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1499(+)"), vec![("EEE".to_string(), 699)]);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:1500(+)"), none);
+        assert_eq!(trxpos_at_pos(&tome, "chr03:2000(+)"), none);
+    }
+}

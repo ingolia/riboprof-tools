@@ -405,21 +405,6 @@ mod tests {
 
     use self::csv::Error;
 
-    struct TestWriter {
-        dest: Rc<RefCell<Vec<u8>>>,
-    }
-
-    impl io::Write for TestWriter {
-        fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-            self.dest.borrow_mut().append(&mut buf.to_vec());
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> Result<(), io::Error> {
-            Ok(())
-        }
-    }
-
     fn record_from_str(recstr: &str) -> bed::Record {
         bed::Reader::new(recstr.as_bytes())
             .records()
