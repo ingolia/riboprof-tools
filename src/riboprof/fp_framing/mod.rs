@@ -46,27 +46,29 @@ impl Config {
         } else {
             bam::Reader::from_path(Path::new(&cli.input))?
         };
-        
+
         let annotate = match cli.annotate {
             None => None,
             Some(ref annot_file) => {
                 let header = bam::Header::from_template(input.header());
                 Some(bam::Writer::from_path(Path::new(&annot_file), &header)?)
-            },
+            }
         };
-        
+
         let trxome = Self::read_transcriptome(&cli)?;
 
-        Ok(Config { input: input,
-                    output: Path::new(&cli.output).to_path_buf(),
-                    trxome: trxome,
-                    flanking: Self::parse_pair(&cli.flanking)?,
-                    cdsbody: Self::parse_pair(&cli.cdsbody)?,
-                    lengths: Self::parse_pair(&cli.lengths)?,
-                    count_multi: cli.count_multi,
-                    annotate: annotate})
+        Ok(Config {
+            input: input,
+            output: Path::new(&cli.output).to_path_buf(),
+            trxome: trxome,
+            flanking: Self::parse_pair(&cli.flanking)?,
+            cdsbody: Self::parse_pair(&cli.cdsbody)?,
+            lengths: Self::parse_pair(&cli.lengths)?,
+            count_multi: cli.count_multi,
+            annotate: annotate,
+        })
     }
-    
+
     fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>, failure::Error> {
         // ZZZ Handle Trx->Gene mappings
         let mut refids = refids::RefIDSet::new();
@@ -82,25 +84,32 @@ impl Config {
     }
 
     fn parse_pair<I>(pair_str: &str) -> Result<Range<I>, failure::Error>
-    where I: str::FromStr, 
-          I::Err: Error + Send + Sized + Sync + 'static
+    where
+        I: str::FromStr,
+        I::Err: Error + Send + Sized + Sync + 'static,
     {
         let strs: Vec<&str> = pair_str.split(",").collect();
         if strs.len() == 2 {
-            Ok(Range{start: strs[0].parse()?, end: strs[1].parse()?})
+            Ok(Range {
+                start: strs[0].parse()?,
+                end: strs[1].parse()?,
+            })
         } else {
-            Err(failure::err_msg(format!("Expecting integer pair \"a,b\" but got \"{}\"", pair_str)))
+            Err(failure::err_msg(format!(
+                "Expecting integer pair \"a,b\" but got \"{}\"",
+                pair_str
+            )))
         }
     }
 }
 
 pub fn fp_framing(mut config: Config) -> Result<(), failure::Error> {
-    Ok( () )
+    Ok(())
 }
 
 #[derive(Debug)]
 pub enum FpFramingError {
-    BadArgument(String)
+    BadArgument(String),
 }
 
 impl Error for FpFramingError {}

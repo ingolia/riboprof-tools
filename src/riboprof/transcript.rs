@@ -24,6 +24,7 @@ use failure;
 ///
 /// Parameterized over the data type used for identifiers (e.g.,
 /// `String`, `Rc<String>`, or `Arc<String>`).
+#[derive(Debug, Clone)]
 pub struct Transcript<R> {
     gene: R,
     trxname: R,
@@ -46,7 +47,7 @@ impl<R> Transcript<R> {
 
 impl<R> Transcript<R>
 where
-    R: Deref<Target = String>
+    R: Deref<Target = String>,
 {
     /// Returns the gene name for the transcript
     pub fn gene(&self) -> &str {
@@ -529,14 +530,19 @@ mod tests {
 
     fn transcriptome_from_str(bedstr: &str) -> Transcriptome<Rc<String>> {
         let mut refids = RefIDSet::new();
-        Transcriptome::new_from_bed(bed::Reader::new(bedstr.as_bytes()).records(), &mut refids).expect("Transcriptome from string")
+        Transcriptome::new_from_bed(bed::Reader::new(bedstr.as_bytes()).records(), &mut refids)
+            .expect("Transcriptome from string")
     }
 
-    fn transcripts_at_pos<R>(tome: &Transcriptome<R>, posstr: &str) -> Vec<String> 
-        where R: Hash + Eq + Deref<Target = String> + From<String>
+    fn transcripts_at_pos<R>(tome: &Transcriptome<R>, posstr: &str) -> Vec<String>
+    where
+        R: Hash + Eq + Deref<Target = String> + From<String>,
     {
-        let pos: Pos<R,ReqStrand> = posstr.parse().expect("Parsing position");
-        let mut trxs: Vec<String> = tome.find_at_loc(&pos).map(|trx| trx.trxname().deref().to_string()).collect();
+        let pos: Pos<R, ReqStrand> = posstr.parse().expect("Parsing position");
+        let mut trxs: Vec<String> = tome
+            .find_at_loc(&pos)
+            .map(|trx| trx.trxname().deref().to_string())
+            .collect();
         trxs.sort();
         trxs
     }
@@ -558,8 +564,14 @@ chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
         assert_eq!(transcripts_at_pos(&tome, "chr01:999(+)"), none);
         assert_eq!(transcripts_at_pos(&tome, "chr01:1000(+)"), vec!["AAA"]);
         assert_eq!(transcripts_at_pos(&tome, "chr01:1234(+)"), vec!["AAA"]);
-        assert_eq!(transcripts_at_pos(&tome, "chr01:1950(+)"), vec!["AAA", "BBB"]);
-        assert_eq!(transcripts_at_pos(&tome, "chr01:1999(+)"), vec!["AAA", "BBB"]);
+        assert_eq!(
+            transcripts_at_pos(&tome, "chr01:1950(+)"),
+            vec!["AAA", "BBB"]
+        );
+        assert_eq!(
+            transcripts_at_pos(&tome, "chr01:1999(+)"),
+            vec!["AAA", "BBB"]
+        );
         assert_eq!(transcripts_at_pos(&tome, "chr01:2000(+)"), vec!["BBB"]);
         assert_eq!(transcripts_at_pos(&tome, "chr01:2050(+)"), vec!["BBB"]);
         assert_eq!(transcripts_at_pos(&tome, "chr01:2099(+)"), vec!["BBB"]);

@@ -74,10 +74,16 @@ impl<'a, R: 'a + Eq> TrxPos<'a, R> {
 }
 
 impl<'a, R: Eq + Hash> TrxPos<'a, R> {
-    pub fn transcriptome_pos<'b, 'c>(tome: &'b Transcriptome<R>, gpos: &'c Pos<R, ReqStrand>) -> impl Iterator<Item = TrxPos<'a, R>>
-        where 'b: 'a, 'c: 'a
+    pub fn transcriptome_pos<'b, 'c>(
+        tome: &'b Transcriptome<R>,
+        gpos: &'c Pos<R, ReqStrand>,
+    ) -> impl Iterator<Item = TrxPos<'a, R>>
+    where
+        'b: 'a,
+        'c: 'a,
     {
-        tome.find_at_loc(gpos).filter_map(move |trx| Self::from_genomic_pos(trx, gpos))
+        tome.find_at_loc(gpos)
+            .filter_map(move |trx| Self::from_genomic_pos(trx, gpos))
     }
 }
 

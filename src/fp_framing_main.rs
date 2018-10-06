@@ -104,11 +104,13 @@ fn get_cli() -> Result<CLI, failure::Error> {
         )
         .arg(Arg::with_name("input").value_name("INPUT.BAM").required(true))
         .get_matches();
-    
+
     Ok(CLI {
         output: matches.value_of("output").unwrap().to_string(),
         bed: matches.value_of("bed").unwrap().to_string(),
-        genes: matches.values_of_lossy("genes").unwrap_or_else(|| Vec::new()),
+        genes: matches
+            .values_of_lossy("genes")
+            .unwrap_or_else(|| Vec::new()),
         flanking: matches.value_of("flanking").unwrap().to_string(),
         cdsbody: matches.value_of("cdsbody").unwrap().to_string(),
         lengths: matches.value_of("lengths").unwrap().to_string(),
