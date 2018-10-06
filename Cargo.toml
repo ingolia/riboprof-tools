@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Nicholas Ingolia <ingolia@berkeley.edu>"]
 
 [dependencies]
-bio = { git = "https://github.com/ingolia/rust-bio", branch = "annot-map" }
+bio = { git = "https://github.com/rust-bio/rust-bio" }
 rust-htslib = "*"
 itertools = "*"
 csv = "*"
