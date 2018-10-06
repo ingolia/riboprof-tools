@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::fs;
+use std::hash::Hash;
 use std::num::ParseIntError;
 use std::path::Path;
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use bio_types::annot::loc::*;
 use bio_types::annot::pos::*;
 use bio_types::strand::*;
 
-use transcript::Transcript;
+use transcript::*;
 
 pub struct TrxPos<'a, R: 'a> {
     transcript: &'a Transcript<R>,
@@ -57,9 +58,9 @@ impl<'a, R: 'a> TrxPos<'a, R> {
 }
 
 impl<'a, R: 'a + Eq> TrxPos<'a, R> {
-    pub fn from_genomic_pos(
+    pub fn from_genomic_pos<'b>(
         transcript: &'a Transcript<R>,
-        gpos: &Pos<R, ReqStrand>,
+        gpos: &'b Pos<R, ReqStrand>,
     ) -> Option<Self> {
         transcript
             .loc()
@@ -69,6 +70,14 @@ impl<'a, R: 'a + Eq> TrxPos<'a, R> {
                 ReqStrand::Reverse => None,
             })
             .map(|pos| Self::new(transcript, pos as usize))
+    }
+}
+
+impl<'a, R: Eq + Hash> TrxPos<'a, R> {
+    pub fn transcriptome_pos<'b, 'c>(tome: &'b Transcriptome<R>, gpos: &'c Pos<R, ReqStrand>) -> impl Iterator<Item = TrxPos<'a, R>>
+        where 'b: 'a, 'c: 'a
+    {
+        tome.find_at_loc(gpos).filter_map(move |trx| Self::from_genomic_pos(trx, gpos))
     }
 }
 
