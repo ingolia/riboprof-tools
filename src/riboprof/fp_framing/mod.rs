@@ -16,6 +16,8 @@ use rust_htslib::bam::Read as BamRead;
 
 use transcript::*;
 
+mod stats;
+
 pub struct CLI {
     pub input: String,
     pub output: String,
