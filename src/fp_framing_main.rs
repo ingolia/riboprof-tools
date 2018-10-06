@@ -114,5 +114,6 @@ fn get_cli() -> Result<CLI, failure::Error> {
         lengths: matches.value_of("lengths").unwrap().to_string(),
         count_multi: matches.is_present("count-multi"),
         annotate: matches.value_of_lossy("annotate").map(|a| a.to_string()),
+        input: matches.value_of("input").unwrap().to_string(),
     })
 }
