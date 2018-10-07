@@ -29,8 +29,29 @@ impl AnnotStats {
     pub fn tally_ambig(&mut self) { self.ambig += 1 }
     pub fn tally_good(&mut self) { self.good += 1 }
 
+    pub fn bad_total(&self) -> usize {
+        self.no_gene + self.noncoding + self.noncoding_overlap + self.multi_coding + self.incompatible + self.ambig
+    }
+
     pub fn total(&self) -> usize {
-        self.no_gene + self.noncoding + self.noncoding_overlap + self.multi_coding + self.incompatible + self.ambig + self.good
+        self.bad_total() + self.good
+    }
+
+    pub fn table(&self, align_ttl: f64) -> String {
+        let mut tbl = String::new();
+
+        let ttl = self.total() as f64;
+
+        tbl += &format!("\tNoGene\t{}\t{:.4}\t{:.4}\n", self.no_gene(), self.no_gene() as f64 / align_ttl, self.no_gene() as f64 / ttl);
+        tbl += &format!("\tNoncodingOnly\t{}\t{:.4}\t{:.4}\n", self.noncoding(), self.noncoding() as f64 / align_ttl, self.noncoding() as f64 / ttl);
+        tbl += &format!("\tNoncodingOverlap\t{}\t{:.4}\t{:.4}\n", self.noncoding_overlap(), self.noncoding_overlap() as f64 / align_ttl, self.noncoding_overlap() as f64 / ttl);
+        tbl += &format!("\tMultiCoding\t{}\t{:.4}\t{:.4}\n", self.multi_coding(), self.multi_coding() as f64 / align_ttl, self.multi_coding() as f64 / ttl);
+        tbl += &format!("\tNoCompatible\t{}\t{:.4}\t{:.4}\n", self.incompatible(), self.incompatible() as f64 / align_ttl, self.incompatible() as f64 / ttl);
+        tbl += &format!("\tAmbigFrame\t{}\t{:.4}\t{:.4}\n", self.ambig(), self.ambig() as f64 / align_ttl, self.ambig() as f64 / ttl);
+        tbl += &format!("BadAnnotation\t{}\t{:.4}\t{:.4}\n", self.bad_total(), self.bad_total() as f64 / align_ttl, self.bad_total() as f64 / ttl);
+        tbl += &format!("GoodAnnotation\t{}\t{:.4}\t{:.4}\n", self.good(), self.good() as f64 / align_ttl, self.good() as f64 / ttl);
+        
+        tbl
     }
 }
 
@@ -61,7 +82,32 @@ impl AlignStats {
 
     pub fn annot_stats_mut(&mut self) -> &mut AnnotStats { &mut self.annot_stats }
 
-    pub fn total(&self) -> usize {
-        self.unmapped + self.short + self.long + self.multi_hit + self.annot_stats.total()
+    pub fn total(&self) -> usize { self.bad_total() + self.good_total() }
+
+    pub fn bad_total(&self) -> usize {
+        self.unmapped + self.short + self.long + self.multi_hit
+    }
+
+    pub fn good_total(&self) -> usize { self.annot_stats.total() }
+
+    pub fn table(&self) -> String {
+        let mut tbl = String::new();
+
+        let ttl = self.total() as f64;
+
+        tbl += &format!("TOTAL\t\t{}\n", self.total());
+        tbl += &format!("\tBamTooShort\t{}\t{:.04}\n", self.short(), self.short() as f64 / ttl);
+        tbl += &format!("\tBamTooLong\t{}\t{:.04}\n", self.long(), self.long() as f64 / ttl);
+        tbl += &format!("\tBamNoHit\t{}\t{:.04}\n", self.unmapped(), self.unmapped() as f64 / ttl);
+        tbl += &format!("\tBamMultiHit\t{}\t{:.04}\n", self.multi_hit(), self.multi_hit() as f64 / ttl);
+        tbl += &format!("BadAlignment\t\t{}\t{:.04}\n", self.bad_total(), self.bad_total() as f64 / ttl);
+        tbl += &format!("GoodAlignment\t\t{}\t{:.04}\n", self.good_total(), self.good_total() as f64 / ttl);
+        tbl += &self.annot_stats.table(ttl);
+
+// Start, End = # counted in start, end metagene
+// Body = # counted in body framing analysis
+// Not mutually exclusive
+
+        tbl
     }
 }
