@@ -108,12 +108,12 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
         }
     };
 
-    let mut align_stats = AlignStats::new();
+    let mut framing_stats = FramingStats::new(&config.lengths, &config.flanking);
 
     for recres in input.records() {
         let mut rec = recres?;
 
-        let tag = record_framing(&config, &mut align_stats, &rec);
+        let tag = record_framing(&config, &mut framing_stats, &rec);
 
         if let Some(ref mut ann_writer) = &mut annotate {
             rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?; 
@@ -124,7 +124,7 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     Ok(())
 }
 
-pub fn record_framing(config: &Config, align_stats: &mut AlignStats, rec: &bam::Record) -> String {
+pub fn record_framing(config: &Config, framing_stats: &mut FramingStats, rec: &bam::Record) -> String {
     "N/A".to_string()
 }
 

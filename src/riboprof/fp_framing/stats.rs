@@ -11,7 +11,7 @@ pub struct FramingStats {
 }
 
 impl FramingStats {
-    pub fn new(lengths: Range<usize>, flanking: Range<isize>) -> Self {
+    pub fn new(lengths: &Range<usize>, flanking: &Range<isize>) -> Self {
         let len_profile = LenProfile::new_with_default(lengths.start, lengths.end);
         
         let flanking_len = flanking.end as usize - min(flanking.end, flanking.start) as usize;
