@@ -18,6 +18,8 @@ use transcript::*;
 
 mod stats;
 
+use fp_framing::stats::*;
+
 pub struct CLI {
     pub input: String,
     pub output: String,
@@ -31,43 +33,29 @@ pub struct CLI {
 }
 
 pub struct Config {
-    input: bam::Reader,
+    input: String,
     output: PathBuf,
     trxome: Transcriptome<Rc<String>>,
     flanking: Range<isize>,
     cdsbody: Range<isize>,
     lengths: Range<usize>,
     count_multi: bool,
-    annotate: Option<bam::Writer>,
+    annotate: Option<PathBuf>,
 }
 
 impl Config {
     pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
-        let input = if cli.input == "-" {
-            bam::Reader::from_stdin()?
-        } else {
-            bam::Reader::from_path(Path::new(&cli.input))?
-        };
-
-        let annotate = match cli.annotate {
-            None => None,
-            Some(ref annot_file) => {
-                let header = bam::Header::from_template(input.header());
-                Some(bam::Writer::from_path(Path::new(&annot_file), &header)?)
-            }
-        };
-
         let trxome = Self::read_transcriptome(&cli)?;
 
         Ok(Config {
-            input: input,
+            input: cli.input.to_string(),
             output: Path::new(&cli.output).to_path_buf(),
             trxome: trxome,
             flanking: Self::parse_pair(&cli.flanking)?,
             cdsbody: Self::parse_pair(&cli.cdsbody)?,
             lengths: Self::parse_pair(&cli.lengths)?,
             count_multi: cli.count_multi,
-            annotate: annotate,
+            annotate: cli.annotate.as_ref().map(|ann| Path::new(&ann).to_path_buf()),
         })
     }
 
@@ -105,8 +93,39 @@ impl Config {
     }
 }
 
-pub fn fp_framing(mut config: Config) -> Result<(), failure::Error> {
+pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
+    let mut input = if config.input == "-" {
+        bam::Reader::from_stdin()?
+    } else {
+        bam::Reader::from_path(Path::new(&config.input))?
+    };
+    
+    let mut annotate = match config.annotate {
+        None => None,
+        Some(ref annot_file) => {
+            let header = bam::Header::from_template(input.header());
+            Some(bam::Writer::from_path(Path::new(&annot_file), &header)?)
+        }
+    };
+
+    let mut align_stats = AlignStats::new();
+
+    for recres in input.records() {
+        let mut rec = recres?;
+
+        let tag = record_framing(&config, &mut align_stats, &rec);
+
+        if let Some(ref mut ann_writer) = &mut annotate {
+            rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?; 
+            ann_writer.write(&rec)?;
+        }
+    }
+
     Ok(())
+}
+
+pub fn record_framing(config: &Config, align_stats: &mut AlignStats, rec: &bam::Record) -> String {
+    "N/A".to_string()
 }
 
 #[derive(Debug)]
