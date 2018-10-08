@@ -30,6 +30,28 @@ impl<T: Clone> LenProfile<T> {
     }
 }
 
+impl<T: Default> LenProfile<T> {
+    pub fn new_with_default(minlen: usize, maxlen: usize) -> Self {
+        let nlen = if minlen > maxlen {
+            0
+        } else {
+            1 + maxlen - minlen
+        };
+        
+        let mut len_vec = Vec::new();
+        for i in 0..nlen {
+            len_vec.push(Default::default());
+        }
+
+        LenProfile {
+            short: Default::default(),
+            len_vec: len_vec,
+            long: Default::default(),
+            minlen: minlen,
+        }        
+    }
+}
+
 impl<T> LenProfile<T> {
     pub fn get(&self, len: usize) -> &T {
         if len < self.minlen {
@@ -47,6 +69,39 @@ impl<T> LenProfile<T> {
                 .get_mut(len - self.minlen)
                 .unwrap_or(&mut self.long)
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Frame<T> {
+    frames: [T; 3]
+}
+
+impl<T: Clone> Frame<T> {
+    pub fn new(initial: T) -> Self {
+        Frame { frames: [initial.clone(), initial.clone(), initial] }
+    }
+}
+
+impl<T: Default> Frame<T> {
+    pub fn new_with_default() -> Self {
+        Frame { frames: [Default::default(), Default::default(), Default::default()] }
+    }
+}
+
+impl<T> Frame<T> {
+    pub fn to_frame<I>(i: I) -> usize
+        where I: Into<isize>
+    {
+        (((i.into() % 3) + 3) % 3) as usize
+    }
+
+    pub fn get<I: Into<isize>>(&self, pos: I) -> &T {
+        &self.frames[Self::to_frame(pos)]
+    }
+
+    pub fn get_mut<I: Into<isize>>(&mut self, pos: I) -> &mut T {
+        &mut self.frames[Self::to_frame(pos)]
     }
 }
 
