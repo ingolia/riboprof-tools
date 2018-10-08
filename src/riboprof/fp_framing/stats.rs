@@ -1,3 +1,42 @@
+use std::cmp::min;
+use std::ops::Range;
+
+use metagene::*;
+
+pub struct FramingStats {
+    frame_length: Frame<LenProfile<usize>>,
+    around_start: Metagene<LenProfile<usize>>,
+    around_end: Metagene<LenProfile<usize>>,
+    align_stats: AlignStats
+}
+
+impl FramingStats {
+    pub fn new(lengths: Range<usize>, flanking: Range<isize>) -> Self {
+        let len_profile = LenProfile::new_with_default(lengths.start, lengths.end);
+        
+        let flanking_len = flanking.end as usize - min(flanking.end, flanking.start) as usize;
+
+        FramingStats {
+            frame_length: Frame::new(len_profile.clone()),
+            around_start: Metagene::new(flanking.start, flanking_len, len_profile.clone()),
+            around_end: Metagene::new(flanking.start, flanking_len, len_profile.clone()),
+            align_stats: AlignStats::new(),
+        }
+    }
+
+    pub fn frame_length(&self) -> &Frame<LenProfile<usize>> { &self.frame_length }
+    pub fn around_start(&self) -> &Metagene<LenProfile<usize>> { &self.around_start }
+    pub fn around_end(&self) -> &Metagene<LenProfile<usize>> { &self.around_end }
+    pub fn align_stats(&self) -> &AlignStats { &self.align_stats }
+
+    pub fn frame_length_mut(&mut self) -> &mut Frame<LenProfile<usize>> { &mut self.frame_length }
+    pub fn around_start_mut(&mut self) -> &mut Metagene<LenProfile<usize>> { &mut self.around_start }
+    pub fn around_end_mut(&mut self) -> &mut Metagene<LenProfile<usize>> { &mut self.around_end }
+    pub fn align_stats_mut(&mut self) -> &mut AlignStats { &mut self.align_stats }
+
+    
+}
+
 pub struct AnnotStats {
     no_gene: usize,
     noncoding: usize,
