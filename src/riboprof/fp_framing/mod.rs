@@ -16,8 +16,10 @@ use rust_htslib::bam::Read as BamRead;
 
 use transcript::*;
 
+mod framing;
 mod stats;
 
+use fp_framing::framing::*;
 use fp_framing::stats::*;
 
 pub struct CLI {
@@ -113,7 +115,7 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     for recres in input.records() {
         let mut rec = recres?;
 
-        let tag = record_framing(&config, &mut framing_stats, &rec);
+        let tag = record_framing(&config.trxome, &rec, &mut framing_stats, &config.cdsbody, config.count_multi);
 
         if let Some(ref mut ann_writer) = &mut annotate {
             rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?; 
@@ -122,10 +124,6 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     }
 
     Ok(())
-}
-
-pub fn record_framing(config: &Config, framing_stats: &mut FramingStats, rec: &bam::Record) -> String {
-    "N/A".to_string()
 }
 
 #[derive(Debug)]
