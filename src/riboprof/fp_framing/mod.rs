@@ -39,7 +39,7 @@ pub struct Config {
     output: PathBuf,
     trxome: Transcriptome<Rc<String>>,
     flanking: Range<isize>,
-    cdsbody: Range<isize>,
+    cdsbody: (isize, isize),
     lengths: Range<usize>,
     count_multi: bool,
     annotate: Option<PathBuf>,
@@ -49,12 +49,14 @@ impl Config {
     pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
         let trxome = Self::read_transcriptome(&cli)?;
 
+        let cdsbody_range = Self::parse_pair(&cli.cdsbody)?;
+
         Ok(Config {
             input: cli.input.to_string(),
             output: Path::new(&cli.output).to_path_buf(),
             trxome: trxome,
             flanking: Self::parse_pair(&cli.flanking)?,
-            cdsbody: Self::parse_pair(&cli.cdsbody)?,
+            cdsbody: (cdsbody_range.start, cdsbody_range.end),
             lengths: Self::parse_pair(&cli.lengths)?,
             count_multi: cli.count_multi,
             annotate: cli
