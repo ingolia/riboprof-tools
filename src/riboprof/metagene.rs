@@ -37,7 +37,7 @@ impl<T: Default> LenProfile<T> {
         } else {
             1 + maxlen - minlen
         };
-        
+
         let mut len_vec = Vec::new();
         for i in 0..nlen {
             len_vec.push(Default::default());
@@ -48,7 +48,7 @@ impl<T: Default> LenProfile<T> {
             len_vec: len_vec,
             long: Default::default(),
             minlen: minlen,
-        }        
+        }
     }
 }
 
@@ -74,24 +74,29 @@ impl<T> LenProfile<T> {
 
 #[derive(Clone, Debug)]
 pub struct Frame<T> {
-    frames: [T; 3]
+    frames: [T; 3],
 }
 
 impl<T: Clone> Frame<T> {
     pub fn new(initial: T) -> Self {
-        Frame { frames: [initial.clone(), initial.clone(), initial] }
+        Frame {
+            frames: [initial.clone(), initial.clone(), initial],
+        }
     }
 }
 
 impl<T: Default> Frame<T> {
     pub fn new_with_default() -> Self {
-        Frame { frames: [Default::default(), Default::default(), Default::default()] }
+        Frame {
+            frames: [Default::default(), Default::default(), Default::default()],
+        }
     }
 }
 
 impl<T> Frame<T> {
     pub fn to_frame<I>(i: I) -> usize
-        where I: Into<isize>
+    where
+        I: Into<isize>,
     {
         (((i.into() % 3) + 3) % 3) as usize
     }

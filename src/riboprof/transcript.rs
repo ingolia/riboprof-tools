@@ -270,11 +270,13 @@ where
 }
 
 /// Returns true when `inner` is compatible with the splicing of `outer`.
-/// 
+///
 /// Compatible splicing means that `inner` is on the same strand as
 /// `outer`, lies within it, and has a congruent splicing structure.
-pub fn splice_compatible<R: Clone + Eq>(outer: &Spliced<R, ReqStrand>, inner: &Spliced<R, ReqStrand>) -> bool
-{
+pub fn splice_compatible<R: Clone + Eq>(
+    outer: &Spliced<R, ReqStrand>,
+    inner: &Spliced<R, ReqStrand>,
+) -> bool {
     let mut inner_contigs = inner.exon_contigs().into_iter();
 
     let mut prev_end = if let Some(c0) = inner_contigs.next() {
@@ -296,7 +298,7 @@ pub fn splice_compatible<R: Clone + Eq>(outer: &Spliced<R, ReqStrand>, inner: &S
         if 1 + end - start != c0.length() as isize {
             return false;
         }
-        
+
         end
     } else {
         return false;
@@ -639,6 +641,7 @@ chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
         let a = make_spliced("chr01:1000-1500;2000-2500;3000-3500(+)");
         assert!(splice_compatible(&a, &make_spliced("chr01:1100-1200(+)")));
         assert!(!splice_compatible(&a, &make_spliced("chr01:1100-1200(-)")));
+        assert!(!splice_compatible(&a, &make_spliced("chr02:1100-1200(+)")));
 
         assert!(splice_compatible(&a, &make_spliced("chr01:1000-1200(+)")));
         assert!(!splice_compatible(&a, &make_spliced("chr01:999-1200(+)")));
@@ -650,22 +653,56 @@ chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
         assert!(splice_compatible(&a, &make_spliced("chr01:2300-2500(+)")));
         assert!(!splice_compatible(&a, &make_spliced("chr01:2300-2501(+)")));
 
-        assert!(splice_compatible(&a, &make_spliced("chr01:1200-1500;2000-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1501;2000-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1499;2000-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1500;2001-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1500;1999-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1500;1700-1800;2000-2200(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:1200-1300;1400-1500;2000-2200(+)")));
+        assert!(splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1500;2000-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1501;2000-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1499;2000-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1500;2001-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1500;1999-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1500;1700-1800;2000-2200(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1300;1400-1500;2000-2200(+)")
+        ));
 
-        assert!(splice_compatible(&a, &make_spliced("chr01:1200-1500;2000-2500;3000-3200(+)")));
-        assert!(splice_compatible(&a, &make_spliced("chr01:2200-2500;3000-3500(+)")));
-        assert!(splice_compatible(&a, &make_spliced("chr01:2200-2500;3000-3499(+)")));
-        assert!(!splice_compatible(&a, &make_spliced("chr01:2200-2500;3000-3501(+)")));
+        assert!(splice_compatible(
+            &a,
+            &make_spliced("chr01:1200-1500;2000-2500;3000-3200(+)")
+        ));
+        assert!(splice_compatible(
+            &a,
+            &make_spliced("chr01:2200-2500;3000-3500(+)")
+        ));
+        assert!(splice_compatible(
+            &a,
+            &make_spliced("chr01:2200-2500;3000-3499(+)")
+        ));
+        assert!(!splice_compatible(
+            &a,
+            &make_spliced("chr01:2200-2500;3000-3501(+)")
+        ));
 
         let b = make_spliced("chr01:1000-1500;2000-2500;3000-3500(-)");
         assert!(splice_compatible(&b, &make_spliced("chr01:1100-1200(-)")));
         assert!(!splice_compatible(&b, &make_spliced("chr01:1100-1200(+)")));
+        assert!(!splice_compatible(&b, &make_spliced("chr02:1100-1200(-)")));
 
         assert!(splice_compatible(&b, &make_spliced("chr01:1000-1200(-)")));
         assert!(!splice_compatible(&b, &make_spliced("chr01:999-1200(-)")));
@@ -677,17 +714,50 @@ chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
         assert!(splice_compatible(&b, &make_spliced("chr01:2300-2500(-)")));
         assert!(!splice_compatible(&b, &make_spliced("chr01:2300-2501(-)")));
 
-        assert!(splice_compatible(&b, &make_spliced("chr01:1200-1500;2000-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1501;2000-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1499;2000-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1500;2001-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1500;1999-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1500;1700-1800;2000-2200(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:1200-1300;1400-1500;2000-2200(-)")));
+        assert!(splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1500;2000-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1501;2000-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1499;2000-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1500;2001-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1500;1999-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1500;1700-1800;2000-2200(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1300;1400-1500;2000-2200(-)")
+        ));
 
-        assert!(splice_compatible(&b, &make_spliced("chr01:1200-1500;2000-2500;3000-3200(-)")));
-        assert!(splice_compatible(&b, &make_spliced("chr01:2200-2500;3000-3500(-)")));
-        assert!(splice_compatible(&b, &make_spliced("chr01:2200-2500;3000-3499(-)")));
-        assert!(!splice_compatible(&b, &make_spliced("chr01:2200-2500;3000-3501(-)")));
+        assert!(splice_compatible(
+            &b,
+            &make_spliced("chr01:1200-1500;2000-2500;3000-3200(-)")
+        ));
+        assert!(splice_compatible(
+            &b,
+            &make_spliced("chr01:2200-2500;3000-3500(-)")
+        ));
+        assert!(splice_compatible(
+            &b,
+            &make_spliced("chr01:2200-2500;3000-3499(-)")
+        ));
+        assert!(!splice_compatible(
+            &b,
+            &make_spliced("chr01:2200-2500;3000-3501(-)")
+        ));
     }
 }

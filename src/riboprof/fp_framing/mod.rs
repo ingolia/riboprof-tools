@@ -57,7 +57,10 @@ impl Config {
             cdsbody: Self::parse_pair(&cli.cdsbody)?,
             lengths: Self::parse_pair(&cli.lengths)?,
             count_multi: cli.count_multi,
-            annotate: cli.annotate.as_ref().map(|ann| Path::new(&ann).to_path_buf()),
+            annotate: cli
+                .annotate
+                .as_ref()
+                .map(|ann| Path::new(&ann).to_path_buf()),
         })
     }
 
@@ -101,7 +104,7 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     } else {
         bam::Reader::from_path(Path::new(&config.input))?
     };
-    
+
     let mut annotate = match config.annotate {
         None => None,
         Some(ref annot_file) => {
@@ -115,10 +118,16 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     for recres in input.records() {
         let mut rec = recres?;
 
-        let tag = record_framing(&config.trxome, &rec, &mut framing_stats, &config.cdsbody, config.count_multi);
+        let tag = record_framing(
+            &config.trxome,
+            &rec,
+            &mut framing_stats,
+            &config.cdsbody,
+            config.count_multi,
+        );
 
         if let Some(ref mut ann_writer) = &mut annotate {
-            rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?; 
+            rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?;
             ann_writer.write(&rec)?;
         }
     }
