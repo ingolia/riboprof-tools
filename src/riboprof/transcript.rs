@@ -76,6 +76,27 @@ where
 {
     /// Returns a new `Transcript`.
     ///
+    /// ```
+    /// # use std::error::Error;
+    /// # extern crate bio_types;
+    /// # extern crate riboprof;
+    /// # use std::rc::Rc;
+    /// # use bio_types::annot::loc::Loc;
+    /// # use bio_types::annot::pos::Pos;
+    /// # use bio_types::strand::ReqStrand;
+    /// use riboprof::transcript::*;
+    /// # fn main() -> Result<(), Box<Error>> {
+    /// let gene = Rc::new("ENSG00000245848".to_string());
+    /// let trxname = Rc::new("ENST00000498907.2".to_string());
+    /// let trx = Transcript::new(gene.clone(), trxname.clone(),
+    ///                           "chr19:33299934-33302565(-)".parse()?,
+    ///                           Some(150..1227))?;
+    /// let trx_pos = Pos::new(trxname.clone(), 507, ReqStrand::Forward);
+    /// let chr_pos = trx.loc().pos_outof(&trx_pos).ok_or("Pos out of transcript bounds")?;
+    /// assert_eq!(format!("{}", chr_pos), "chr19:33302057(-)");
+    /// # Ok(())
+    /// # }
+    /// ```
     /// # Arguments
     ///
     /// * `gene` is the gene identifier for the annotation
@@ -124,6 +145,29 @@ where
     /// CDS is determined by the "thickStart" and "thickEnd"
     /// entries; if these are equal, then the CDS is `None.`
     ///
+    /// ```
+    /// # use std::error::Error;
+    /// # extern crate bio;
+    /// # extern crate bio_types;
+    /// # extern crate riboprof;
+    /// # use std::rc::Rc;
+    /// use bio::io::bed;
+    /// # use bio_types::annot::loc::Loc;
+    /// # use bio_types::annot::pos::Pos;
+    /// # use bio_types::annot::refids::RefIDSet;
+    /// # use bio_types::strand::ReqStrand;
+    /// use riboprof::transcript::*;
+    /// # fn main() -> Result<(), Box<Error>> {
+    /// let bed_str = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,\n";
+    /// let bed = bed::Reader::new(bed_str.as_bytes()).records().next().ok_or("No record")??;
+    /// let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+    /// let trx = Transcript::from_bed12(&bed, &mut refids)?;
+    /// let trx_start = Pos::new(trx.trxname().clone(), trx.cds_range().as_ref().ok_or("No CDS")?.start as isize, ReqStrand::Forward);
+    /// let chr_start = trx.loc().pos_outof(&trx_start).ok_or("Pos not within transcript")?;
+    /// assert_eq!(format!("{}", chr_start), "chr01:87285(+)");
+    /// # Ok(())
+    /// # }
+    /// ```
     /// # Arguments
     ///
     /// `record` is a BED format record containing the annotation information
@@ -283,6 +327,23 @@ where
 ///
 /// Compatible splicing means that `inner` is on the same strand as
 /// `outer`, lies within it, and has a congruent splicing structure.
+///
+/// ```
+/// # extern crate bio_types;
+/// # extern crate riboprof;
+/// # use std::error::Error;
+/// # fn main() -> Result<(),Box<Error>> {
+/// use bio_types::annot::spliced::Spliced;
+/// use bio_types::strand::ReqStrand;
+/// use riboprof::transcript::*;
+/// let gene_loc: Spliced<String, ReqStrand> = "chr01:87261-87387;87500-87822(+)".parse()?;
+/// let read1_loc = "chr01:87350-87387;87500-87513(+)".parse()?;
+/// let read2_loc = "chr01:87464-87513(+)".parse()?;
+/// assert!(splice_compatible(&gene_loc, &read1_loc));
+/// assert!(!splice_compatible(&gene_loc, &read2_loc));
+/// # Ok(())
+/// # }
+/// ```
 pub fn splice_compatible<R: Clone + Eq>(
     outer: &Spliced<R, ReqStrand>,
     inner: &Spliced<R, ReqStrand>,
@@ -483,8 +544,6 @@ mod tests {
             .next()
             .expect("Reading record string")
             .expect("No record read")
-        //            .collect::<Result<Vec<bed::Record>, csv::Error>>()
-        //            .expect("Reading record string")
     }
 
     fn transcript_from_str(recstr: &str) -> Transcript<Rc<String>> {
