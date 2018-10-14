@@ -193,6 +193,8 @@ mod tests {
 
     use bio::io::bed;
     use bio_types::annot::refids::RefIDSet;
+    use bio_types::annot::contig::*;
+    use bio_types::annot::pos::*;
     use bio_types::annot::spliced::*;
 
     fn fp(fp_str: &str) -> Spliced<Rc<String>, ReqStrand> {
@@ -235,7 +237,7 @@ mod tests {
         let rev_str = "chr02	2906	5009	YBL111C	0	-	2906	5009	0	2	1210,794,	0,1309,\n";
         let rev_trx = transcript_from_str(&rev_str);
 
-        fn into<'a>(fp: &Spliced<Rc<String>, ReqStrand>, trx: &Transcript<Rc<String>>) -> Option<(String, usize)> {
+        fn into(fp: &Spliced<Rc<String>, ReqStrand>, trx: &Transcript<Rc<String>>) -> Option<(String, usize)> {
             fp_into_transcript(fp, trx).map(|trxpos| (trxpos.transcript().trxname().to_string(), trxpos.pos()))
         }
 
@@ -308,6 +310,83 @@ mod tests {
         assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 823)), Some(2));
         assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 824)), Some(0));
         assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 825)), None);
+    }
+
+    #[test]
+    fn gene_framing_1trx() {
+        // [87261..87387) [87387..87500) [87500..87822)
+        // [0    ..126)                  [126  ..448)
+        // CDS is 24..378
+        let fwd_str = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,\n";
+        let fwd_trx = transcript_from_str(&fwd_str);
+        assert_eq!(fwd_trx.cds_range(), &Some(24..378));
+
+        // CDS body is (15, -15)
+        fn frame(fp_str: &str, trx: &Transcript<Rc<String>>) -> String {
+            let fp: Spliced<Rc<String>, ReqStrand> = fp_str.parse().expect("Error parsing fp");
+            let gfr = gene_framing(&(15, -15), &vec![trx], &fp);
+            String::from_utf8(gfr.aux()).expect("Bad UTF8")
+        }
+
+        assert_eq!(frame("chr01:87276-87305(+)", &fwd_trx), "YAL030W/-9/-363/*");
+        assert_eq!(frame("chr01:87297-87325(+)", &fwd_trx), "YAL030W/+12/-342/*");
+        assert_eq!(frame("chr01:87299-87327(+)", &fwd_trx), "YAL030W/+14/-340/*");
+        assert_eq!(frame("chr01:87300-87328(+)", &fwd_trx), "YAL030W/+15/-339/+0");
+        assert_eq!(frame("chr01:87301-87329(+)", &fwd_trx), "YAL030W/+16/-338/+1");
+        assert_eq!(frame("chr01:87302-87330(+)", &fwd_trx), "YAL030W/+17/-337/+2");
+        assert_eq!(frame("chr01:87303-87331(+)", &fwd_trx), "YAL030W/+18/-336/+0");
+
+        assert_eq!(frame("chr01:87260-87287(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(frame("chr01:87361-87388(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(frame("chr01:87300-87315;87345-87360(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(frame("chr01:87499-87526(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(frame("chr01:87375-87387;87450-87453;87500-87514(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(frame("chr01:87800-87823(+)", &fwd_trx), "NoCompatible");
+
+        assert_eq!(frame("chr01:87375-87387;87500-87514(+)", &fwd_trx), "YAL030W/+90/-264/+0");
+        assert_eq!(frame("chr01:87376-87387;87500-87516(+)", &fwd_trx), "YAL030W/+91/-263/+1");
+
+        assert_eq!(frame("chr01:87722-87750(+)", &fwd_trx), "YAL030W/+324/-30/+0");
+        assert_eq!(frame("chr01:87737-87765(+)", &fwd_trx), "YAL030W/+339/-15/+0");
+        assert_eq!(frame("chr01:87738-87765(+)", &fwd_trx), "YAL030W/+340/-14/*");
+        assert_eq!(frame("chr01:87756-87784(+)", &fwd_trx), "YAL030W/+358/+4/*");
+
+        validate_framing(&fwd_trx, 28, (15, -15));
+
+        // CDS is [101..842)
+        let rev_str = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
+        let rev_trx = transcript_from_str(&rev_str);
+
+        validate_framing(&rev_trx, 28, (15, -15));
+    }
+
+    fn validate_framing(trx: &Transcript<Rc<String>>, fplen: isize, cdsbody: (isize, isize)) {
+        for i in 0..(trx.loc().exon_total_length() as isize - fplen) {
+            let trx_first = Pos::new(trx.trxname().clone(), i, ReqStrand::Forward);
+            let chr_first = trx.loc().pos_outof(&trx_first).expect(&format!("Cannot pull fp start {} @ {} out", trx_first, i));
+            let trx_last = Pos::new(trx.trxname().clone(), i + fplen - 1, ReqStrand::Forward);
+            let chr_last = trx.loc().pos_outof(&trx_last).expect(&format!("Cannot pull fp last {} @ {} out", trx_last, i));
+            let chr_length = (1 + chr_last.pos() - chr_first.pos()).abs() as usize;
+            let chr_span = Contig::with_first_length(&chr_first, chr_length).expect("Cannot make fp chr contig");
+            let chr_fp = trx.loc().contig_intersection(&chr_span).expect("Cannot intersect fp chr contig");
+            let trxs = vec![trx];
+            let gf = match gene_framing(&cdsbody, &trxs, &chr_fp) {
+                GeneFrameResult::Good(gf) => gf,
+                _ => panic!("No gene framing"),
+            };
+            
+            assert_eq!(&gf.gene, trx.gene_ref());
+            assert_eq!(gf.vs_cds_start.as_ref().map(|vs_start| i - vs_start), trx.cds_range().as_ref().map(|cds| cds.start as isize));
+            assert_eq!(gf.vs_cds_end.as_ref().map(|vs_end| i - vs_end), trx.cds_range().as_ref().map(|cds| cds.end as isize));
+            if gf.vs_cds_start.as_ref().map_or(true, |vs_start| *vs_start < cdsbody.0) {
+                assert_eq!(gf.frame, None);
+            } else if gf.vs_cds_end.as_ref().map_or(true, |vs_end| *vs_end > cdsbody.1) {
+                assert_eq!(gf.frame, None);
+            } else {
+                assert!(gf.frame.as_ref().map_or(false, 
+                                                 |fr| gf.vs_cds_start.as_ref().map_or(false, |vs_start| (*vs_start - *fr as isize) % 3 == 0)));
+            }
+        }
     }
 }
 
