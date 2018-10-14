@@ -402,6 +402,83 @@ pub fn splice_compatible<R: Clone + Eq>(
     true
 }
 
+pub struct TrxPos<'a, R: 'a> {
+    transcript: &'a Transcript<R>,
+    pos: usize,
+}
+
+impl<'a, R: 'a> TrxPos<'a, R> {
+    pub fn new(transcript: &'a Transcript<R>, pos: usize) -> Self {
+        TrxPos {
+            transcript: transcript,
+            pos: pos,
+        }
+    }
+
+    pub fn transcript(&self) -> &'a Transcript<R> {
+        self.transcript
+    }
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+
+    pub fn offset_from_trx_start(&self) -> isize {
+        self.pos as isize
+    }
+    pub fn offset_from_trx_end(&self) -> isize {
+        self.transcript.loc().length() as isize - self.pos as isize
+    }
+
+    pub fn offset_from_cds_start(&self) -> Option<isize> {
+        self.transcript
+            .cds_range()
+            .as_ref()
+            .map(|cds| self.pos as isize - cds.start as isize)
+    }
+
+    pub fn offset_from_cds_end(&self) -> Option<isize> {
+        self.transcript
+            .cds_range()
+            .as_ref()
+            .map(|cds| self.pos as isize - cds.end as isize)
+    }
+
+    pub fn cds_frame(&self) -> Option<usize> {
+        self.offset_from_cds_start()
+            .map(|off| ((off % 3) + 3) as usize % 3)
+    }
+}
+
+impl<'a, R: 'a + Eq> TrxPos<'a, R> {
+    pub fn from_genomic_pos<'b>(
+        transcript: &'a Transcript<R>,
+        gpos: &'b Pos<R, ReqStrand>,
+    ) -> Option<Self> {
+        transcript
+            .loc()
+            .pos_into(gpos)
+            .map_or(None, |tpos| match tpos.strand() {
+                ReqStrand::Forward => Some(tpos.pos()),
+                ReqStrand::Reverse => None,
+            })
+            .map(|pos| Self::new(transcript, pos as usize))
+    }
+}
+
+impl<'a, R: Eq + Hash> TrxPos<'a, R> {
+    pub fn transcriptome_pos<'b, 'c>(
+        tome: &'b Transcriptome<R>,
+        gpos: &'c Pos<R, ReqStrand>,
+    ) -> impl Iterator<Item = TrxPos<'a, R>>
+    where
+        'b: 'a,
+        'c: 'a,
+    {
+        tome.find_at_loc(gpos)
+            .filter_map(move |trx| Self::from_genomic_pos(trx, gpos))
+    }
+}
+
 pub struct Transcriptome<R>
 where
     R: Eq + Hash,
