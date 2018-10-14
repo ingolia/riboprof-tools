@@ -126,7 +126,7 @@ pub fn gene_framing<'a>(
 
 /// Returns `Some` if the iterator yields one or more items, all of
 /// which are equal, and `None` otherwise.
-pub fn all_if_same<T: Eq, I: Iterator<Item = T>>(mut iter: I) -> Option<T> {
+fn all_if_same<T: Eq, I: Iterator<Item = T>>(mut iter: I) -> Option<T> {
     iter.next().map_or(None, |x0| {
         if iter.all(|x| x == x0) {
             Some(x0)
@@ -151,7 +151,7 @@ pub fn all_if_same<T: Eq, I: Iterator<Item = T>>(mut iter: I) -> Option<T> {
 /// `cds_start + 15 <= pos <= cds_end + (-18)`
 ///
 /// * `trxpos` is the transcript position
-pub fn body_frame<'a>(cdsbody: &(isize, isize), trxpos: &TrxPos<'a, Rc<String>>) -> Option<usize> {
+pub fn body_frame<'a, S>(cdsbody: &(isize, isize), trxpos: &TrxPos<'a, S>) -> Option<usize> {
     let vs_start = trxpos.offset_from_cds_start()?;
     let vs_end = trxpos.offset_from_cds_end()?;
     if vs_start >= cdsbody.0 && vs_end <= cdsbody.1 {
@@ -270,4 +270,44 @@ mod tests {
         assert_eq!(into(&fp("chr02:2906-2936(-)"), &rev_trx), Some(("YBL111C".to_string(), 1974)));
         assert_eq!(into(&fp("chr02:2905-2936(-)"), &rev_trx), None);
     }
+
+    #[test]
+    fn test_body_frame() {
+        // CDS is [83..1337) 
+        let fwd_str = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
+        let fwd_trx = transcript_from_str(&fwd_str);
+        
+        // CDS is [101..842)
+        let rev_str = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
+        let rev_trx = transcript_from_str(&rev_str);
+
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 63)), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 83)), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 97)), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 98)), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 99)), Some(1));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 100)), Some(2));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
+        assert_eq!(body_frame(&(16, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
+        assert_eq!(body_frame(&(17, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 200)), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1321)), Some(2));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1322)), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1323)), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1353)), None);
+
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 50)), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 101)), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 112)), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 113)), Some(0));
+        assert_eq!(body_frame(&(11, -18), &TrxPos::new(&rev_trx, 113)), Some(0));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 114)), Some(1));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 115)), Some(2));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 116)), Some(0));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 215)), Some(0));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 823)), Some(2));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 824)), Some(0));
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 825)), None);
+    }
 }
+

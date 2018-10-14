@@ -46,14 +46,14 @@ impl<'a, R: 'a> TrxPos<'a, R> {
         self.transcript
             .cds_range()
             .as_ref()
-            .map(|cds| cds.start as isize - self.pos as isize)
+            .map(|cds| self.pos as isize - cds.start as isize)
     }
 
     pub fn offset_from_cds_end(&self) -> Option<isize> {
         self.transcript
             .cds_range()
             .as_ref()
-            .map(|cds| cds.end as isize - self.pos as isize)
+            .map(|cds| self.pos as isize - cds.end as isize)
     }
 
     pub fn cds_frame(&self) -> Option<usize> {
