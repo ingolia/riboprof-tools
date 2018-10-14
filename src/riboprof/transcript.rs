@@ -43,18 +43,28 @@ impl<R> Transcript<R> {
     pub fn cds_range(&self) -> &Option<Range<usize>> {
         &self.cds
     }
+
+    /// Returns a reference to the gene name.
+    pub fn gene_ref(&self) -> &R {
+        &self.gene
+    }
+
+    /// Returns a reference to the transcript name.
+    pub fn trxname_ref(&self) -> &R {
+        &self.trxname
+    }
 }
 
 impl<R> Transcript<R>
 where
     R: Deref<Target = String>,
 {
-    /// Returns the gene name for the transcript
+    /// Returns the gene name for the transcript as a `&str`.
     pub fn gene(&self) -> &str {
         &self.gene
     }
 
-    /// Returns the name of the transcript
+    /// Returns the name of the transcript as a `&str`.
     pub fn trxname(&self) -> &str {
         &self.trxname
     }
