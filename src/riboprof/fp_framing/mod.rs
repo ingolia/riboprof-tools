@@ -134,6 +134,9 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
         }
     }
 
+    fs::write(config.output.join("_framing_stats.txt"),
+              framing_stats.align_stats().table())?;
+
     Ok(())
 }
 

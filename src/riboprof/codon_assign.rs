@@ -12,6 +12,7 @@ use regex::Regex;
 use bio_types::annot::loc::*;
 use bio_types::annot::pos::*;
 use bio_types::strand::*;
+use rust_htslib::bam::record::Record;
 
 use transcript::*;
 

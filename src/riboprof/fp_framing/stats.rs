@@ -1,4 +1,3 @@
-#[allow(unused_code)]
 use std::cmp::min;
 use std::ops::Range;
 
@@ -11,6 +10,7 @@ pub struct FramingStats {
     align_stats: AlignStats,
 }
 
+#[allow(dead_code)]
 impl FramingStats {
     pub fn new(lengths: &Range<usize>, flanking: &Range<isize>) -> Self {
         let len_profile = LenProfile::new_with_default(lengths.start, lengths.end);
@@ -62,6 +62,7 @@ pub struct AnnotStats {
     good: usize,
 }
 
+#[allow(dead_code)]
 impl AnnotStats {
     pub fn new() -> Self {
         AnnotStats {
@@ -97,24 +98,37 @@ impl AnnotStats {
         self.good
     }
 
+    #[allow(dead_code)]
     pub fn tally_no_gene(&mut self) {
         self.no_gene += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_noncoding(&mut self) {
         self.noncoding += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_noncoding_overlap(&mut self) {
         self.noncoding_overlap += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_multi_coding(&mut self) {
         self.multi_coding += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_incompatible(&mut self) {
         self.incompatible += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_ambig(&mut self) {
         self.ambig += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_good(&mut self) {
         self.good += 1
     }
@@ -222,23 +236,32 @@ impl AlignStats {
         self.multi_hit
     }
 
+    #[allow(dead_code)]
     pub fn annot_stats(&self) -> &AnnotStats {
         &self.annot_stats
     }
 
+    #[allow(dead_code)]
     pub fn tally_unmapped(&mut self) {
         self.unmapped += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_short(&mut self) {
         self.short += 1
     }
+    
+    #[allow(dead_code)]
     pub fn tally_long(&mut self) {
         self.long += 1
     }
+
+    #[allow(dead_code)]
     pub fn tally_multi_hit(&mut self) {
         self.multi_hit += 1
     }
 
+    #[allow(dead_code)]
     pub fn annot_stats_mut(&mut self) -> &mut AnnotStats {
         &mut self.annot_stats
     }
