@@ -37,12 +37,7 @@ pub fn record_framing(
             return Ok(BamFrameResult::TooLong);
         }
 
-        let ffr = footprint_framing(
-            trxome,
-            &fp,
-            cdsbody,
-            count_multi,
-        );
+        let ffr = footprint_framing(trxome, &fp, cdsbody, count_multi);
         Ok(BamFrameResult::Fp(ffr))
     } else {
         Ok(BamFrameResult::NoHit)
@@ -90,7 +85,10 @@ pub fn footprint_framing(
     let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
 
     if gene_sets.len() > 1 {
-        let is_coding: Vec<bool> = gene_sets.values().map(|trxs| trxs.iter().any(|trx| trx.is_coding())).collect();
+        let is_coding: Vec<bool> = gene_sets
+            .values()
+            .map(|trxs| trxs.iter().any(|trx| trx.is_coding()))
+            .collect();
 
         if is_coding.iter().all(|coding| *coding) {
             FpFrameResult::MultiCoding
@@ -100,7 +98,8 @@ pub fn footprint_framing(
             FpFrameResult::NoncodingOnly
         }
     } else if let Some((_gene, trxs)) = gene_sets.into_iter().next() {
-        let coding_trxs: Vec<&Transcript<Rc<String>>> = trxs.into_iter().filter(|trx| trx.is_coding()).collect();
+        let coding_trxs: Vec<&Transcript<Rc<String>>> =
+            trxs.into_iter().filter(|trx| trx.is_coding()).collect();
 
         if coding_trxs.is_empty() {
             FpFrameResult::NoncodingOnly
@@ -118,7 +117,7 @@ pub enum FpFrameResult {
     NoGene,
     NoncodingOnly,
     NoncodingOverlap,
-    MultiCoding
+    MultiCoding,
 }
 
 impl FpFrameResult {
@@ -171,8 +170,7 @@ impl GeneFraming {
         buf.into_bytes()
     }
 
-    fn opt_to_str(opt: &Option<isize>) -> String 
-    {
+    fn opt_to_str(opt: &Option<isize>) -> String {
         opt.map_or_else(|| "/*".to_string(), |x| format!("/{:+}", x))
     }
 }
@@ -286,9 +284,9 @@ mod tests {
     use super::*;
 
     use bio::io::bed;
-    use bio_types::annot::refids::RefIDSet;
     use bio_types::annot::contig::*;
     use bio_types::annot::pos::*;
+    use bio_types::annot::refids::RefIDSet;
     use bio_types::annot::spliced::*;
 
     fn fp(fp_str: &str) -> Spliced<Rc<String>, ReqStrand> {
@@ -325,54 +323,100 @@ mod tests {
         // [0    ..126)                  [126  ..448)
         let fwd_str = "chr01	87261	87822	YAL030W	0	+	87285	87752	0	2	126,322,	0,239,\n";
         let fwd_trx = transcript_from_str(&fwd_str);
-        
+
         // [2906..4116) [4116..4215) [4215..5009)
         // (2004..794]               (794 ..0]
         let rev_str = "chr02	2906	5009	YBL111C	0	-	2906	5009	0	2	1210,794,	0,1309,\n";
         let rev_trx = transcript_from_str(&rev_str);
 
-        fn into(fp: &Spliced<Rc<String>, ReqStrand>, trx: &Transcript<Rc<String>>) -> Option<(String, usize)> {
-            fp_into_transcript(fp, trx).map(|trxpos| (trxpos.transcript().trxname().to_string(), trxpos.pos()))
+        fn into(
+            fp: &Spliced<Rc<String>, ReqStrand>,
+            trx: &Transcript<Rc<String>>,
+        ) -> Option<(String, usize)> {
+            fp_into_transcript(fp, trx)
+                .map(|trxpos| (trxpos.transcript().trxname().to_string(), trxpos.pos()))
         }
 
         assert_eq!(into(&fp("chr01:87260-87290(+)"), &fwd_trx), None);
-        assert_eq!(into(&fp("chr01:87261-87290(+)"), &fwd_trx), Some(("YAL030W".to_string(), 0)));
+        assert_eq!(
+            into(&fp("chr01:87261-87290(+)"), &fwd_trx),
+            Some(("YAL030W".to_string(), 0))
+        );
         assert_eq!(into(&fp("chr01:87261-87290(-)"), &fwd_trx), None);
         assert_eq!(into(&fp("chr02:87261-87290(+)"), &fwd_trx), None);
-        assert_eq!(into(&fp("chr01:87361-87387(+)"), &fwd_trx), Some(("YAL030W".to_string(), 100)));
+        assert_eq!(
+            into(&fp("chr01:87361-87387(+)"), &fwd_trx),
+            Some(("YAL030W".to_string(), 100))
+        );
         assert_eq!(into(&fp("chr01:87361-87388(+)"), &fwd_trx), None);
-        assert_eq!(into(&fp("chr01:87361-87387;87500-87501(+)"), &fwd_trx), Some(("YAL030W".to_string(), 100)));
-        assert_eq!(into(&fp("chr01:87361-87387;87499-87501(+)"), &fwd_trx), None);
-        assert_eq!(into(&fp("chr01:87361-87388;87500-87501(+)"), &fwd_trx), None);
-        assert_eq!(into(&fp("chr01:87500-87530(+)"), &fwd_trx), Some(("YAL030W".to_string(), 126)));
-        assert_eq!(into(&fp("chr01:87800-87822(+)"), &fwd_trx), Some(("YAL030W".to_string(), 426)));
+        assert_eq!(
+            into(&fp("chr01:87361-87387;87500-87501(+)"), &fwd_trx),
+            Some(("YAL030W".to_string(), 100))
+        );
+        assert_eq!(
+            into(&fp("chr01:87361-87387;87499-87501(+)"), &fwd_trx),
+            None
+        );
+        assert_eq!(
+            into(&fp("chr01:87361-87388;87500-87501(+)"), &fwd_trx),
+            None
+        );
+        assert_eq!(
+            into(&fp("chr01:87500-87530(+)"), &fwd_trx),
+            Some(("YAL030W".to_string(), 126))
+        );
+        assert_eq!(
+            into(&fp("chr01:87800-87822(+)"), &fwd_trx),
+            Some(("YAL030W".to_string(), 426))
+        );
         assert_eq!(into(&fp("chr01:87800-87823(+)"), &fwd_trx), None);
 
         assert_eq!(into(&fp("chr02:4980-5010(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:4980-5009(-)"), &rev_trx), Some(("YBL111C".to_string(), 0)));
+        assert_eq!(
+            into(&fp("chr02:4980-5009(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 0))
+        );
         assert_eq!(into(&fp("chr02:4980-5009(+)"), &rev_trx), None);
         assert_eq!(into(&fp("chr01:4980-5009(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:4780-4809(-)"), &rev_trx), Some(("YBL111C".to_string(), 200)));
+        assert_eq!(
+            into(&fp("chr02:4780-4809(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 200))
+        );
         assert_eq!(into(&fp("chr02:4780-4790;4795-4809(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:4215-4245(-)"), &rev_trx), Some(("YBL111C".to_string(), 764)));
+        assert_eq!(
+            into(&fp("chr02:4215-4245(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 764))
+        );
         assert_eq!(into(&fp("chr02:4214-4245(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:4107-4116;4215-4235(-)"), &rev_trx), Some(("YBL111C".to_string(), 774)));
+        assert_eq!(
+            into(&fp("chr02:4107-4116;4215-4235(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 774))
+        );
         assert_eq!(into(&fp("chr02:4107-4116;4214-4235(-)"), &rev_trx), None);
         assert_eq!(into(&fp("chr02:4107-4116;4216-4235(-)"), &rev_trx), None);
         assert_eq!(into(&fp("chr02:4107-4115;4215-4235(-)"), &rev_trx), None);
         assert_eq!(into(&fp("chr02:4107-4117;4215-4235(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:4107-4116;4170-4180;4215-4235(-)"), &rev_trx), None);
-        assert_eq!(into(&fp("chr02:3985-4116(-)"), &rev_trx), Some(("YBL111C".to_string(), 794)));
-        assert_eq!(into(&fp("chr02:2906-2936(-)"), &rev_trx), Some(("YBL111C".to_string(), 1974)));
+        assert_eq!(
+            into(&fp("chr02:4107-4116;4170-4180;4215-4235(-)"), &rev_trx),
+            None
+        );
+        assert_eq!(
+            into(&fp("chr02:3985-4116(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 794))
+        );
+        assert_eq!(
+            into(&fp("chr02:2906-2936(-)"), &rev_trx),
+            Some(("YBL111C".to_string(), 1974))
+        );
         assert_eq!(into(&fp("chr02:2905-2936(-)"), &rev_trx), None);
     }
 
     #[test]
     fn test_body_frame() {
-        // CDS is [83..1337) 
+        // CDS is [83..1337)
         let fwd_str = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
         let fwd_trx = transcript_from_str(&fwd_str);
-        
+
         // CDS is [101..842)
         let rev_str = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
         let rev_trx = transcript_from_str(&rev_str);
@@ -387,8 +431,14 @@ mod tests {
         assert_eq!(body_frame(&(16, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
         assert_eq!(body_frame(&(17, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
         assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 200)), Some(0));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1321)), Some(2));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1322)), Some(0));
+        assert_eq!(
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1321)),
+            Some(2)
+        );
+        assert_eq!(
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1322)),
+            Some(0)
+        );
         assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1323)), None);
         assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1353)), None);
 
@@ -423,26 +473,65 @@ mod tests {
         }
 
         assert_eq!(frame("chr01:87276-87305(+)", &fwd_trx), "YAL030W/-9/-363/*");
-        assert_eq!(frame("chr01:87297-87325(+)", &fwd_trx), "YAL030W/+12/-342/*");
-        assert_eq!(frame("chr01:87299-87327(+)", &fwd_trx), "YAL030W/+14/-340/*");
-        assert_eq!(frame("chr01:87300-87328(+)", &fwd_trx), "YAL030W/+15/-339/+0");
-        assert_eq!(frame("chr01:87301-87329(+)", &fwd_trx), "YAL030W/+16/-338/+1");
-        assert_eq!(frame("chr01:87302-87330(+)", &fwd_trx), "YAL030W/+17/-337/+2");
-        assert_eq!(frame("chr01:87303-87331(+)", &fwd_trx), "YAL030W/+18/-336/+0");
+        assert_eq!(
+            frame("chr01:87297-87325(+)", &fwd_trx),
+            "YAL030W/+12/-342/*"
+        );
+        assert_eq!(
+            frame("chr01:87299-87327(+)", &fwd_trx),
+            "YAL030W/+14/-340/*"
+        );
+        assert_eq!(
+            frame("chr01:87300-87328(+)", &fwd_trx),
+            "YAL030W/+15/-339/+0"
+        );
+        assert_eq!(
+            frame("chr01:87301-87329(+)", &fwd_trx),
+            "YAL030W/+16/-338/+1"
+        );
+        assert_eq!(
+            frame("chr01:87302-87330(+)", &fwd_trx),
+            "YAL030W/+17/-337/+2"
+        );
+        assert_eq!(
+            frame("chr01:87303-87331(+)", &fwd_trx),
+            "YAL030W/+18/-336/+0"
+        );
 
         assert_eq!(frame("chr01:87260-87287(+)", &fwd_trx), "NoCompatible");
         assert_eq!(frame("chr01:87361-87388(+)", &fwd_trx), "NoCompatible");
-        assert_eq!(frame("chr01:87300-87315;87345-87360(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(
+            frame("chr01:87300-87315;87345-87360(+)", &fwd_trx),
+            "NoCompatible"
+        );
         assert_eq!(frame("chr01:87499-87526(+)", &fwd_trx), "NoCompatible");
-        assert_eq!(frame("chr01:87375-87387;87450-87453;87500-87514(+)", &fwd_trx), "NoCompatible");
+        assert_eq!(
+            frame("chr01:87375-87387;87450-87453;87500-87514(+)", &fwd_trx),
+            "NoCompatible"
+        );
         assert_eq!(frame("chr01:87800-87823(+)", &fwd_trx), "NoCompatible");
 
-        assert_eq!(frame("chr01:87375-87387;87500-87514(+)", &fwd_trx), "YAL030W/+90/-264/+0");
-        assert_eq!(frame("chr01:87376-87387;87500-87516(+)", &fwd_trx), "YAL030W/+91/-263/+1");
+        assert_eq!(
+            frame("chr01:87375-87387;87500-87514(+)", &fwd_trx),
+            "YAL030W/+90/-264/+0"
+        );
+        assert_eq!(
+            frame("chr01:87376-87387;87500-87516(+)", &fwd_trx),
+            "YAL030W/+91/-263/+1"
+        );
 
-        assert_eq!(frame("chr01:87722-87750(+)", &fwd_trx), "YAL030W/+324/-30/+0");
-        assert_eq!(frame("chr01:87737-87765(+)", &fwd_trx), "YAL030W/+339/-15/+0");
-        assert_eq!(frame("chr01:87738-87765(+)", &fwd_trx), "YAL030W/+340/-14/*");
+        assert_eq!(
+            frame("chr01:87722-87750(+)", &fwd_trx),
+            "YAL030W/+324/-30/+0"
+        );
+        assert_eq!(
+            frame("chr01:87737-87765(+)", &fwd_trx),
+            "YAL030W/+339/-15/+0"
+        );
+        assert_eq!(
+            frame("chr01:87738-87765(+)", &fwd_trx),
+            "YAL030W/+340/-14/*"
+        );
         assert_eq!(frame("chr01:87756-87784(+)", &fwd_trx), "YAL030W/+358/+4/*");
 
         validate_framing(&fwd_trx, 28, (15, -15));
@@ -457,30 +546,56 @@ mod tests {
     fn validate_framing(trx: &Transcript<Rc<String>>, fplen: isize, cdsbody: (isize, isize)) {
         for i in 0..(trx.loc().exon_total_length() as isize - fplen) {
             let trx_first = Pos::new(trx.trxname().clone(), i, ReqStrand::Forward);
-            let chr_first = trx.loc().pos_outof(&trx_first).expect(&format!("Cannot pull fp start {} @ {} out", trx_first, i));
+            let chr_first = trx
+                .loc()
+                .pos_outof(&trx_first)
+                .expect(&format!("Cannot pull fp start {} @ {} out", trx_first, i));
             let trx_last = Pos::new(trx.trxname().clone(), i + fplen - 1, ReqStrand::Forward);
-            let chr_last = trx.loc().pos_outof(&trx_last).expect(&format!("Cannot pull fp last {} @ {} out", trx_last, i));
+            let chr_last = trx
+                .loc()
+                .pos_outof(&trx_last)
+                .expect(&format!("Cannot pull fp last {} @ {} out", trx_last, i));
             let chr_length = (1 + chr_last.pos() - chr_first.pos()).abs() as usize;
-            let chr_span = Contig::with_first_length(&chr_first, chr_length).expect("Cannot make fp chr contig");
-            let chr_fp = trx.loc().contig_intersection(&chr_span).expect("Cannot intersect fp chr contig");
+            let chr_span = Contig::with_first_length(&chr_first, chr_length)
+                .expect("Cannot make fp chr contig");
+            let chr_fp = trx
+                .loc()
+                .contig_intersection(&chr_span)
+                .expect("Cannot intersect fp chr contig");
             let trxs = vec![trx];
             let gf = match gene_framing(&cdsbody, &trxs, &chr_fp) {
                 GeneFrameResult::Good(gf) => gf,
                 _ => panic!("No gene framing"),
             };
-            
+
             assert_eq!(&gf.gene, trx.gene_ref());
-            assert_eq!(gf.vs_cds_start.as_ref().map(|vs_start| i - vs_start), trx.cds_range().as_ref().map(|cds| cds.start as isize));
-            assert_eq!(gf.vs_cds_end.as_ref().map(|vs_end| i - vs_end), trx.cds_range().as_ref().map(|cds| cds.end as isize));
-            if gf.vs_cds_start.as_ref().map_or(true, |vs_start| *vs_start < cdsbody.0) {
+            assert_eq!(
+                gf.vs_cds_start.as_ref().map(|vs_start| i - vs_start),
+                trx.cds_range().as_ref().map(|cds| cds.start as isize)
+            );
+            assert_eq!(
+                gf.vs_cds_end.as_ref().map(|vs_end| i - vs_end),
+                trx.cds_range().as_ref().map(|cds| cds.end as isize)
+            );
+            if gf
+                .vs_cds_start
+                .as_ref()
+                .map_or(true, |vs_start| *vs_start < cdsbody.0)
+            {
                 assert_eq!(gf.frame, None);
-            } else if gf.vs_cds_end.as_ref().map_or(true, |vs_end| *vs_end > cdsbody.1) {
+            } else if gf
+                .vs_cds_end
+                .as_ref()
+                .map_or(true, |vs_end| *vs_end > cdsbody.1)
+            {
                 assert_eq!(gf.frame, None);
             } else {
-                assert!(gf.frame.as_ref().map_or(false, 
-                                                 |fr| gf.vs_cds_start.as_ref().map_or(false, |vs_start| (*vs_start - *fr as isize) % 3 == 0)));
+                assert!(gf.frame.as_ref().map_or(false, |fr| {
+                    gf.vs_cds_start
+                        .as_ref()
+                        .map_or(false, |vs_start| (*vs_start - *fr as isize) % 3 == 0)
+                }));
             }
         }
     }
 }
-

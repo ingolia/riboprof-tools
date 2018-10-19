@@ -1,5 +1,5 @@
-extern crate failure;
 extern crate clap;
+extern crate failure;
 
 extern crate riboprof;
 

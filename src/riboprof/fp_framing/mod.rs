@@ -107,7 +107,7 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
     } else {
         bam::Reader::from_path(Path::new(&config.input))?
     };
-    
+
     let tids = {
         let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
         Tids::new(&mut refids, input.header())
@@ -141,8 +141,10 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
         }
     }
 
-    fs::write(config.output.join("_framing_stats.txt"),
-              framing_stats.align_stats().table())?;
+    fs::write(
+        config.output.join("_framing_stats.txt"),
+        framing_stats.align_stats().table(),
+    )?;
 
     Ok(())
 }

@@ -250,7 +250,7 @@ impl AlignStats {
     pub fn tally_short(&mut self) {
         self.short += 1
     }
-    
+
     #[allow(dead_code)]
     pub fn tally_long(&mut self) {
         self.long += 1

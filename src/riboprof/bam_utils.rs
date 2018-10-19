@@ -5,14 +5,14 @@ use failure;
 use bio_types::annot::refids::RefIDSet;
 use bio_types::annot::spliced::Spliced;
 use bio_types::strand::ReqStrand;
-use rust_htslib::bam::{HeaderView,record::Cigar,record::CigarStringView};
 use rust_htslib::bam;
+use rust_htslib::bam::{record::Cigar, record::CigarStringView, HeaderView};
 
 pub struct Tids<R> {
-    tids: Vec<R>
+    tids: Vec<R>,
 }
 
-impl <R: Deref<Target = String> + From<String> + Clone> Tids<R> {
+impl<R: Deref<Target = String> + From<String> + Clone> Tids<R> {
     pub fn new(refids: &mut RefIDSet<R>, header: &HeaderView) -> Self {
         let mut tids = Vec::with_capacity(header.target_count() as usize);
 
@@ -27,14 +27,18 @@ impl <R: Deref<Target = String> + From<String> + Clone> Tids<R> {
     }
 }
 
-impl <R> Tids<R> {
+impl<R> Tids<R> {
     pub fn get(&self, tid: u32) -> Option<&R> {
         self.tids.get(tid as usize)
     }
 }
 
-pub fn bam_to_spliced<R>(tids: &Tids<R>, record: &bam::Record) -> Result<Option<Spliced<R, ReqStrand>>, failure::Error>
-    where R: Clone
+pub fn bam_to_spliced<R>(
+    tids: &Tids<R>,
+    record: &bam::Record,
+) -> Result<Option<Spliced<R, ReqStrand>>, failure::Error>
+where
+    R: Clone,
 {
     if record.tid() < 0 {
         return Ok(None);
@@ -42,11 +46,23 @@ pub fn bam_to_spliced<R>(tids: &Tids<R>, record: &bam::Record) -> Result<Option<
 
     let (lengths, starts) = cigar_to_lengths_starts(&record.cigar());
 
-    let refid = tids.get(record.tid() as u32).ok_or_else(|| failure::err_msg(format!("BAM target ID {} out of range", record.tid())))?;
+    let refid = tids
+        .get(record.tid() as u32)
+        .ok_or_else(|| failure::err_msg(format!("BAM target ID {} out of range", record.tid())))?;
 
-    let strand = if record.is_reverse() { ReqStrand::Reverse } else { ReqStrand::Forward };
+    let strand = if record.is_reverse() {
+        ReqStrand::Reverse
+    } else {
+        ReqStrand::Forward
+    };
 
-    let spliced = Spliced::with_lengths_starts(refid.clone(), record.pos() as isize, lengths.as_slice(), starts.as_slice(), strand)?;
+    let spliced = Spliced::with_lengths_starts(
+        refid.clone(),
+        record.pos() as isize,
+        lengths.as_slice(),
+        starts.as_slice(),
+        strand,
+    )?;
 
     Ok(Some(spliced))
 }
@@ -70,7 +86,7 @@ pub fn cigar_to_lengths_starts(cigar_string: &CigarStringView) -> (Vec<usize>, V
                 }
                 curr_start = curr_end + len;
                 curr_end = curr_start;
-            },
+            }
             Cigar::SoftClip(_) => (),
             Cigar::HardClip(_) => (),
             Cigar::Pad(_) => (),
