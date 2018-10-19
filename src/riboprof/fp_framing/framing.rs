@@ -2,18 +2,15 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use failure;
-use itertools::Itertools;
 
 use bio_types::annot::loc::Loc;
-use bio_types::annot::pos::Pos;
+//use bio_types::annot::pos::Pos;
 use bio_types::annot::spliced::Spliced;
 use bio_types::strand::*;
 use rust_htslib::bam;
 
-use fp_framing::stats::*;
-
 use bam_utils::*;
-use codon_assign::*;
+//use codon_assign::*;
 use transcript::*;
 
 pub fn record_framing(
@@ -37,7 +34,7 @@ pub fn record_framing(
             return Ok(BamFrameResult::TooLong);
         }
 
-        let ffr = footprint_framing(trxome, &fp, cdsbody, count_multi);
+        let ffr = footprint_framing(trxome, &fp, cdsbody);
         Ok(BamFrameResult::Fp(ffr))
     } else {
         Ok(BamFrameResult::NoHit)
@@ -80,7 +77,6 @@ pub fn footprint_framing(
     trxome: &Transcriptome<Rc<String>>,
     fp: &Spliced<Rc<String>, ReqStrand>,
     cdsbody: &(isize, isize),
-    count_multi: bool,
 ) -> FpFrameResult {
     let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
 

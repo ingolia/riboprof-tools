@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt;
 use std::fs;
-use std::hash::Hash;
 use std::num::ParseIntError;
 use std::path::Path;
 use std::str::FromStr;
@@ -12,9 +11,9 @@ use regex::Regex;
 use bio_types::annot::loc::*;
 use bio_types::annot::pos::*;
 use bio_types::strand::*;
-use rust_htslib::bam::record::Record;
+//use rust_htslib::bam::record::Record;
 
-use transcript::*;
+//use transcript::*;
 
 /// Mapping of A site positions within a footprint, based on fragment
 /// length.

@@ -39,7 +39,7 @@ impl<T: Default> LenProfile<T> {
         };
 
         let mut len_vec = Vec::new();
-        for i in 0..nlen {
+        for _i in 0..nlen {
             len_vec.push(Default::default());
         }
 

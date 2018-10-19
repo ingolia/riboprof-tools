@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::fs;
-use std::io::{self, Read, Write};
+//use std::io::{self, Read, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -134,6 +134,8 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
             &config.cdsbody,
             config.count_multi,
         )?;
+
+        framing_stats.tally_bam_frame(&res);
 
         if let Some(ref mut ann_writer) = &mut annotate {
             rec.push_aux(b"ZF", &bam::record::Aux::String(&res.aux()))?;

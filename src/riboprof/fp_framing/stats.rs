@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use metagene::*;
 
+use fp_framing::framing::*;
+
 pub struct FramingStats {
     frame_length: Frame<LenProfile<usize>>,
     around_start: Metagene<LenProfile<usize>>,
@@ -49,6 +51,10 @@ impl FramingStats {
     }
     pub fn align_stats_mut(&mut self) -> &mut AlignStats {
         &mut self.align_stats
+    }
+
+    pub fn tally_bam_frame(&mut self, bam_frame: &BamFrameResult) {
+        self.align_stats_mut().tally_bam_frame(bam_frame)
     }
 }
 
@@ -98,39 +104,16 @@ impl AnnotStats {
         self.good
     }
 
-    #[allow(dead_code)]
-    pub fn tally_no_gene(&mut self) {
-        self.no_gene += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_noncoding(&mut self) {
-        self.noncoding += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_noncoding_overlap(&mut self) {
-        self.noncoding_overlap += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_multi_coding(&mut self) {
-        self.multi_coding += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_incompatible(&mut self) {
-        self.incompatible += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_ambig(&mut self) {
-        self.ambig += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_good(&mut self) {
-        self.good += 1
+    pub fn tally_fp_frame(&mut self, fp_frame: &FpFrameResult) {
+        match fp_frame {
+            FpFrameResult::NoGene => self.no_gene += 1,
+            FpFrameResult::NoncodingOnly => self.noncoding += 1,
+            FpFrameResult::NoncodingOverlap => self.noncoding_overlap += 1,
+            FpFrameResult::MultiCoding => self.multi_coding += 1,
+            FpFrameResult::Gene(GeneFrameResult::NoCompatible) => self.incompatible += 1,
+            FpFrameResult::Gene(GeneFrameResult::Ambig) => self.ambig += 1,
+            FpFrameResult::Gene(GeneFrameResult::Good(_)) => self.good += 1,
+        }
     }
 
     pub fn bad_total(&self) -> usize {
@@ -236,29 +219,14 @@ impl AlignStats {
         self.multi_hit
     }
 
-    #[allow(dead_code)]
-    pub fn annot_stats(&self) -> &AnnotStats {
-        &self.annot_stats
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_unmapped(&mut self) {
-        self.unmapped += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_short(&mut self) {
-        self.short += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_long(&mut self) {
-        self.long += 1
-    }
-
-    #[allow(dead_code)]
-    pub fn tally_multi_hit(&mut self) {
-        self.multi_hit += 1
+    pub fn tally_bam_frame(&mut self, bam_frame: &BamFrameResult) {
+        match bam_frame {
+            BamFrameResult::NoHit => self.unmapped += 1,
+            BamFrameResult::MultiHit => self.multi_hit += 1,
+            BamFrameResult::TooShort => self.short += 1,
+            BamFrameResult::TooLong => self.long += 1,
+            BamFrameResult::Fp(ffr) => self.annot_stats.tally_fp_frame(ffr),
+        }
     }
 
     #[allow(dead_code)]
