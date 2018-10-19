@@ -68,12 +68,10 @@ impl<R> Transcript<R>
 where
     R: Hash + Eq + Clone
 {
-    pub fn group_by_gene<'a, I>(trx_iter: I) -> Vec<(R, Vec<&'a Transcript<R>>)>
+    pub fn group_by_gene<'a, I>(trx_iter: I) -> HashMap<R, Vec<&'a Transcript<R>>>
         where I: Iterator<Item = &'a Transcript<R>> + Sized
     {
-        let gene_map = trx_iter.map(|trx| (trx.gene_ref().clone(), trx)).into_group_map();
-
-        gene_map.into_iter().collect()
+        trx_iter.map(|trx| (trx.gene_ref().clone(), trx)).into_group_map()
     }
 }
 

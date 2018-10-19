@@ -87,10 +87,10 @@ pub fn footprint_framing(
     cdsbody: &(isize, isize),
     count_multi: bool,
 ) -> FpFrameResult {
-    let mut gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
+    let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
 
     if gene_sets.len() > 1 {
-        let is_coding: Vec<bool> = gene_sets.iter().map(|(_gene, trxs)| trxs.iter().any(|trx| trx.is_coding())).collect();
+        let is_coding: Vec<bool> = gene_sets.values().map(|trxs| trxs.iter().any(|trx| trx.is_coding())).collect();
 
         if is_coding.iter().all(|coding| *coding) {
             FpFrameResult::MultiCoding
@@ -99,7 +99,7 @@ pub fn footprint_framing(
         } else {
             FpFrameResult::NoncodingOnly
         }
-    } else if let Some((_gene, trxs)) = gene_sets.pop() {
+    } else if let Some((_gene, trxs)) = gene_sets.into_iter().next() {
         let coding_trxs: Vec<&Transcript<Rc<String>>> = trxs.into_iter().filter(|trx| trx.is_coding()).collect();
 
         if coding_trxs.is_empty() {
@@ -108,6 +108,7 @@ pub fn footprint_framing(
             FpFrameResult::Gene(gene_framing(cdsbody, coding_trxs.as_slice(), fp))
         }
     } else {
+        // gene_sets is empty
         FpFrameResult::NoGene
     }
 }
