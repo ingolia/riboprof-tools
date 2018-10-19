@@ -1,5 +1,4 @@
 extern crate failure;
-#[macro_use]
 extern crate clap;
 
 extern crate riboprof;
@@ -25,7 +24,7 @@ fn main() {
 fn wrapper() -> Result<(), failure::Error> {
     let cli = get_cli()?;
     let config = Config::new(&cli)?;
-    fp_framing(config)
+    run_fp_framing(config)
 }
 
 fn get_cli() -> Result<CLI, failure::Error> {

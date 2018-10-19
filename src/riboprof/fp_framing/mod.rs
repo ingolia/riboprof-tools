@@ -10,10 +10,11 @@ use std::str;
 use failure;
 
 use bio::io::bed;
-use bio_types::annot::*;
+use bio_types::annot::refids::RefIDSet;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
+use bam_utils::*;
 use transcript::*;
 
 mod framing;
@@ -68,7 +69,7 @@ impl Config {
 
     fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>, failure::Error> {
         // ZZZ Handle Trx->Gene mappings
-        let mut refids = refids::RefIDSet::new();
+        let mut refids = RefIDSet::new();
         let mut trxome = Transcriptome::new();
 
         for recres in bed::Reader::from_file(&cli.bed)?.records() {
@@ -100,11 +101,16 @@ impl Config {
     }
 }
 
-pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
+pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
     let mut input = if config.input == "-" {
         bam::Reader::from_stdin()?
     } else {
         bam::Reader::from_path(Path::new(&config.input))?
+    };
+    
+    let tids = {
+        let mut refids: RefIDSet<Rc<String>> = RefIDSet::new();
+        Tids::new(&mut refids, input.header())
     };
 
     let mut annotate = match config.annotate {
@@ -120,16 +126,17 @@ pub fn fp_framing(config: Config) -> Result<(), failure::Error> {
     for recres in input.records() {
         let mut rec = recres?;
 
-        let tag = record_framing(
+        let res = record_framing(
             &config.trxome,
+            &tids,
             &rec,
-            &mut framing_stats,
+            &config.lengths,
             &config.cdsbody,
             config.count_multi,
-        );
+        )?;
 
         if let Some(ref mut ann_writer) = &mut annotate {
-            rec.push_aux(b"ZF", &bam::record::Aux::String(tag.as_bytes()))?;
+            rec.push_aux(b"ZF", &bam::record::Aux::String(&res.aux()))?;
             ann_writer.write(&rec)?;
         }
     }

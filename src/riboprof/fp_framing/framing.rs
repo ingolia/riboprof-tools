@@ -1,6 +1,9 @@
 use std::ops::Range;
 use std::rc::Rc;
 
+use failure;
+use itertools::Itertools;
+
 use bio_types::annot::loc::Loc;
 use bio_types::annot::pos::Pos;
 use bio_types::annot::spliced::Spliced;
@@ -9,34 +12,124 @@ use rust_htslib::bam;
 
 use fp_framing::stats::*;
 
+use bam_utils::*;
 use codon_assign::*;
 use transcript::*;
 
 pub fn record_framing(
     trxome: &Transcriptome<Rc<String>>,
+    tids: &Tids<Rc<String>>,
     rec: &bam::Record,
-    framing_stats: &mut FramingStats,
+    lengths: &Range<usize>,
     cdsbody: &(isize, isize),
     count_multi: bool,
-) -> String {
-    "N/A".to_string()
+) -> Result<BamFrameResult, failure::Error> {
+    if !(is_single_hit(rec) || (count_multi && is_first_hit(rec))) {
+        return Ok(BamFrameResult::MultiHit);
+    }
+
+    if let Some(fp) = bam_to_spliced(tids, &rec)? {
+        let fp_len = fp.exon_total_length();
+
+        if fp_len < lengths.start {
+            return Ok(BamFrameResult::TooShort);
+        } else if fp_len > lengths.end {
+            return Ok(BamFrameResult::TooLong);
+        }
+
+        let ffr = footprint_framing(
+            trxome,
+            &fp,
+            cdsbody,
+            count_multi,
+        );
+        Ok(BamFrameResult::Fp(ffr))
+    } else {
+        Ok(BamFrameResult::NoHit)
+    }
+}
+
+pub fn is_single_hit(rec: &bam::Record) -> bool {
+    if let Some(bam::record::Aux::Integer(nh)) = rec.aux(b"NH") {
+        nh == 1
+    } else {
+        true
+    }
+}
+
+pub fn is_first_hit(rec: &bam::Record) -> bool {
+    rec.aux(b"HI") == Some(bam::record::Aux::Integer(1))
+}
+
+pub enum BamFrameResult {
+    NoHit,
+    MultiHit,
+    TooShort,
+    TooLong,
+    Fp(FpFrameResult),
+}
+
+impl BamFrameResult {
+    pub fn aux(&self) -> Vec<u8> {
+        match self {
+            BamFrameResult::NoHit => b"BamNoHit".to_vec(),
+            BamFrameResult::MultiHit => b"BamMultiHit".to_vec(),
+            BamFrameResult::TooShort => b"BamTooShort".to_vec(),
+            BamFrameResult::TooLong => b"BamTooLong".to_vec(),
+            BamFrameResult::Fp(ffr) => ffr.aux(),
+        }
+    }
 }
 
 pub fn footprint_framing(
     trxome: &Transcriptome<Rc<String>>,
-    rec: &bam::Record,
-    framing_stats: &mut FramingStats,
+    fp: &Spliced<Rc<String>, ReqStrand>,
     cdsbody: &(isize, isize),
     count_multi: bool,
 ) -> FpFrameResult {
-    unimplemented!()
+    let mut gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
+
+    if gene_sets.len() > 1 {
+        let is_coding: Vec<bool> = gene_sets.iter().map(|(_gene, trxs)| trxs.iter().any(|trx| trx.is_coding())).collect();
+
+        if is_coding.iter().all(|coding| *coding) {
+            FpFrameResult::MultiCoding
+        } else if is_coding.iter().any(|coding| *coding) {
+            FpFrameResult::NoncodingOverlap
+        } else {
+            FpFrameResult::NoncodingOnly
+        }
+    } else if let Some((_gene, trxs)) = gene_sets.pop() {
+        let coding_trxs: Vec<&Transcript<Rc<String>>> = trxs.into_iter().filter(|trx| trx.is_coding()).collect();
+
+        if coding_trxs.is_empty() {
+            FpFrameResult::NoncodingOnly
+        } else {
+            FpFrameResult::Gene(gene_framing(cdsbody, coding_trxs.as_slice(), fp))
+        }
+    } else {
+        FpFrameResult::NoGene
+    }
 }
 
 pub enum FpFrameResult {
     Gene(GeneFrameResult),
+    NoGene,
     NoncodingOnly,
     NoncodingOverlap,
     MultiCoding
+}
+
+impl FpFrameResult {
+    pub fn aux(&self) -> Vec<u8> {
+        match self {
+            FpFrameResult::Gene(gfr) => gfr.aux(),
+            FpFrameResult::NoGene => "NoGene".to_string().into_bytes(),
+            FpFrameResult::NoncodingOnly => "NoncodingOnly".to_string().into_bytes(),
+            FpFrameResult::NoncodingOverlap => "NoncodingOverlap".to_string().into_bytes(),
+            FpFrameResult::MultiCoding => "MultiCoding".to_string().into_bytes(),
+        }
+    }
 }
 
 /// Result from framing analysis for a footprint, relative to a gene.

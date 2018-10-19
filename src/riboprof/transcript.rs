@@ -7,6 +7,9 @@ use std::io;
 use std::num::ParseIntError;
 use std::ops::{Deref, Range};
 
+use failure;
+use itertools::Itertools;
+
 use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
 use bio_types::annot::loc::Loc;
@@ -14,8 +17,6 @@ use bio_types::annot::pos::*;
 use bio_types::annot::refids::RefIDSet;
 use bio_types::annot::spliced::*;
 use bio_types::strand::*;
-
-use failure;
 
 /// Annotation of a transcript as a `Spliced` `annot` location.
 ///
@@ -44,6 +45,14 @@ impl<R> Transcript<R> {
         &self.cds
     }
 
+    pub fn is_coding(&self) -> bool {
+        self.cds.is_some()
+    }
+
+    pub fn is_noncoding(&self) -> bool {
+        self.cds.is_none()
+    }
+
     /// Returns a reference to the gene name.
     pub fn gene_ref(&self) -> &R {
         &self.gene
@@ -52,6 +61,19 @@ impl<R> Transcript<R> {
     /// Returns a reference to the transcript name.
     pub fn trxname_ref(&self) -> &R {
         &self.trxname
+    }
+}
+
+impl<R> Transcript<R>
+where
+    R: Hash + Eq + Clone
+{
+    pub fn group_by_gene<'a, I>(trx_iter: I) -> Vec<(R, Vec<&'a Transcript<R>>)>
+        where I: Iterator<Item = &'a Transcript<R>> + Sized
+    {
+        let gene_map = trx_iter.map(|trx| (trx.gene_ref().clone(), trx)).into_group_map();
+
+        gene_map.into_iter().collect()
     }
 }
 
