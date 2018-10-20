@@ -168,7 +168,7 @@ impl GeneFraming {
     }
 
     fn opt_to_str(opt: &Option<isize>) -> String {
-        opt.map_or_else(|| "/*".to_string(), |x| format!("/{:+}", x))
+        opt.map_or_else(|| "/*".to_string(), |x| format!("/{}", x))
     }
 
     pub fn vs_cds_start(&self) -> Option<isize> {
@@ -221,7 +221,7 @@ pub fn gene_framing<'a>(
             GeneFrameResult::Good(GeneFraming {
                 gene: gene,
                 vs_cds_start: vs_cds_start,
-                vs_cds_end: vs_cds_end,
+                vs_cds_end: vs_cds_end.map(|x| x + 3),
                 frame: all_if_same(frames.into_iter()),
                 fp_length: fp_length,
             })
