@@ -78,7 +78,7 @@ pub fn footprint_framing(
     fp: &Spliced<Rc<String>, ReqStrand>,
     cdsbody: &(isize, isize),
 ) -> FpFrameResult {
-    let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp));
+    let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp).filter(|trx| trx.loc().strand() == fp.strand()));
 
     if gene_sets.len() > 1 {
         let is_coding: Vec<bool> = gene_sets
@@ -120,10 +120,10 @@ impl FpFrameResult {
     pub fn aux(&self) -> Vec<u8> {
         match self {
             FpFrameResult::Gene(gfr) => gfr.aux(),
-            FpFrameResult::NoGene => "NoGene".to_string().into_bytes(),
-            FpFrameResult::NoncodingOnly => "NoncodingOnly".to_string().into_bytes(),
-            FpFrameResult::NoncodingOverlap => "NoncodingOverlap".to_string().into_bytes(),
-            FpFrameResult::MultiCoding => "MultiCoding".to_string().into_bytes(),
+            FpFrameResult::NoGene => "FpNoGene".to_string().into_bytes(),
+            FpFrameResult::NoncodingOnly => "FpNoncodingOnly".to_string().into_bytes(),
+            FpFrameResult::NoncodingOverlap => "FpNoncodingOverlap".to_string().into_bytes(),
+            FpFrameResult::MultiCoding => "FpMultiCoding".to_string().into_bytes(),
         }
     }
 }
