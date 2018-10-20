@@ -155,6 +155,7 @@ pub struct GeneFraming {
     vs_cds_start: Option<isize>,
     vs_cds_end: Option<isize>,
     frame: Option<usize>,
+    fp_length: usize,
 }
 
 impl GeneFraming {
@@ -168,6 +169,19 @@ impl GeneFraming {
 
     fn opt_to_str(opt: &Option<isize>) -> String {
         opt.map_or_else(|| "/*".to_string(), |x| format!("/{:+}", x))
+    }
+
+    pub fn vs_cds_start(&self) -> Option<isize> {
+        self.vs_cds_start
+    }
+    pub fn vs_cds_end(&self) -> Option<isize> {
+        self.vs_cds_end
+    }
+    pub fn frame(&self) -> Option<usize> {
+        self.frame
+    }
+    pub fn fp_length(&self) -> usize {
+        self.fp_length
     }
 }
 
@@ -183,6 +197,8 @@ pub fn gene_framing<'a>(
     } else {
         trxs[0].gene_ref().clone()
     };
+
+    let fp_length = fp.exon_total_length();
 
     let termini: Vec<TrxPos<'a, Rc<String>>> = trxs
         .into_iter()
@@ -207,6 +223,7 @@ pub fn gene_framing<'a>(
                 vs_cds_start: vs_cds_start,
                 vs_cds_end: vs_cds_end,
                 frame: all_if_same(frames.into_iter()),
+                fp_length: fp_length,
             })
         }
     }

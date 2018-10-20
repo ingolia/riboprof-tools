@@ -40,21 +40,35 @@ impl FramingStats {
         &self.align_stats
     }
 
-    pub fn frame_length_mut(&mut self) -> &mut Frame<LenProfile<usize>> {
-        &mut self.frame_length
-    }
-    pub fn around_start_mut(&mut self) -> &mut Metagene<LenProfile<usize>> {
-        &mut self.around_start
-    }
-    pub fn around_end_mut(&mut self) -> &mut Metagene<LenProfile<usize>> {
-        &mut self.around_end
-    }
-    pub fn align_stats_mut(&mut self) -> &mut AlignStats {
+    fn align_stats_mut(&mut self) -> &mut AlignStats {
         &mut self.align_stats
     }
 
+    pub fn tally_frame_length(&mut self, frame: isize, fp_length: usize) {
+        *self.frame_length.get_mut(frame).get_mut(fp_length) += 1
+    }
+
+    pub fn tally_around_start(&mut self, start_offset: isize, fp_length: usize) {
+        self.around_start.get_mut(start_offset).map(|vs_start| *vs_start.get_mut(fp_length) += 1);
+    }
+
+    pub fn tally_around_end(&mut self, end_offset: isize, fp_length: usize) {
+        self.around_end.get_mut(end_offset).map(|vs_end| *vs_end.get_mut(fp_length) += 1);
+    }
+
     pub fn tally_bam_frame(&mut self, bam_frame: &BamFrameResult) {
-        self.align_stats_mut().tally_bam_frame(bam_frame)
+        self.align_stats_mut().tally_bam_frame(bam_frame);
+
+        match bam_frame {
+            BamFrameResult::Fp(FpFrameResult::Gene(GeneFrameResult::Good(gene_frame))) => {
+                gene_frame
+                    .frame()
+                    .map(|fr| self.tally_frame_length(fr as isize, gene_frame.fp_length()));
+                gene_frame.vs_cds_start().map(|start_offset| self.tally_around_start(start_offset, gene_frame.fp_length()));
+                gene_frame.vs_cds_end().map(|end_offset| self.tally_around_end(end_offset, gene_frame.fp_length()));
+            }
+            _ => (),
+        };
     }
 }
 
