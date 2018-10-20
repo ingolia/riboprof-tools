@@ -6,7 +6,7 @@ use metagene::*;
 use fp_framing::framing::*;
 
 pub struct FramingStats {
-    frame_length: Frame<LenProfile<usize>>,
+    frame_length: LenProfile<Frame<usize>>,
     around_start: Metagene<LenProfile<usize>>,
     around_end: Metagene<LenProfile<usize>>,
     align_stats: AlignStats,
@@ -16,18 +16,19 @@ pub struct FramingStats {
 impl FramingStats {
     pub fn new(lengths: &Range<usize>, flanking: &Range<isize>) -> Self {
         let len_profile = LenProfile::new_with_default(lengths.start, lengths.end);
+        let frames = Frame::new_with_default();
 
         let flanking_len = flanking.end as usize - min(flanking.end, flanking.start) as usize;
 
         FramingStats {
-            frame_length: Frame::new(len_profile.clone()),
+            frame_length: LenProfile::new(lengths.start, lengths.end, frames),
             around_start: Metagene::new(flanking.start, flanking_len, len_profile.clone()),
-            around_end: Metagene::new(flanking.start, flanking_len, len_profile.clone()),
+            around_end: Metagene::new(flanking.start, flanking_len, len_profile),
             align_stats: AlignStats::new(),
         }
     }
 
-    pub fn frame_length(&self) -> &Frame<LenProfile<usize>> {
+    pub fn frame_length(&self) -> &LenProfile<Frame<usize>> {
         &self.frame_length
     }
     pub fn around_start(&self) -> &Metagene<LenProfile<usize>> {
@@ -45,7 +46,7 @@ impl FramingStats {
     }
 
     pub fn tally_frame_length(&mut self, frame: isize, fp_length: usize) {
-        *self.frame_length.get_mut(frame).get_mut(fp_length) += 1
+        *self.frame_length.get_mut(fp_length).get_mut(frame) += 1
     }
 
     pub fn tally_around_start(&mut self, start_offset: isize, fp_length: usize) {
@@ -69,6 +70,66 @@ impl FramingStats {
             }
             _ => (),
         };
+    }
+
+    pub fn around_start_table(&self) -> String {
+        Self::metagene_table(&self.around_start)
+    } 
+
+    pub fn around_end_table(&self) -> String {
+        Self::metagene_table(&self.around_end)
+    }
+
+    pub fn frame_length_table(&self) -> String {
+        let mut table = "length\tfract\tN0\tN1\tN2\tp0\tp1\tp2\tinfo\n".to_string();
+  
+        let ttl = self.frame_length.iter().map(|l| l.iter().sum::<usize>()).sum::<usize>();
+
+        fn length_row((len_str, frame): (String, &Frame<usize>), ttl: usize) -> String {
+            let len_ttl = frame.iter().sum::<usize>();
+            let p0 = *frame.get(0_isize) as f64 / ttl as f64; 
+            let p1 = *frame.get(1_isize) as f64 / ttl as f64; 
+            let p2 = *frame.get(2_isize) as f64 / ttl as f64; 
+            let entropy = -(p0 * p0.log2() + p1 * p1.log2() + p2 * p2.log2());
+            let info = 3.0_f64.log2() - entropy;
+            
+            format!("{}\t{:.04}\t{}\t{}\t{}\t{:.04}\t{:.04}\t{:.04}\t{:.02}\n",
+                    len_str, len_ttl as f64 / ttl as f64,
+                    *frame.get(0_isize), *frame.get(1_isize), *frame.get(2_isize),
+                    p0, p1, p2, info)
+        }
+
+        for line in self.frame_length.named_iter().map(|fl| length_row(fl, ttl)) {
+            table += &line;
+        }
+
+        table
+    }
+
+    fn metagene_table(table: &Metagene<LenProfile<usize>>) -> String {
+        let mut pos_iter = table.pos_iter().peekable();
+
+        let mut table = "pos\tttl".to_string();
+        
+        if let Some((_, len_profile)) = pos_iter.peek() {
+            for (len_str, _) in len_profile.named_iter() {
+                table += &format!("\t{}", len_str);
+            }
+        }
+
+        table += "\n";
+
+        for (pos, len_profile) in pos_iter {
+            let pos_ttl = len_profile.iter().sum::<usize>();
+
+            table += &format!("{}\t{}", pos, pos_ttl);
+            for n_len in len_profile {
+                table += &format!("\t{}", n_len);
+            }
+            table += "\n";
+        }
+
+        table
     }
 }
 
@@ -241,11 +302,6 @@ impl AlignStats {
             BamFrameResult::TooLong => self.long += 1,
             BamFrameResult::Fp(ffr) => self.annot_stats.tally_fp_frame(ffr),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn annot_stats_mut(&mut self) -> &mut AnnotStats {
-        &mut self.annot_stats
     }
 
     pub fn total(&self) -> usize {

@@ -148,6 +148,17 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
         framing_stats.align_stats().table(),
     )?;
 
+    fs::write(
+        config.output.join("_frame_length.txt"),
+        framing_stats.frame_length_table())?;
+    fs::write(
+        config.output.join("_around_start.txt"),
+        framing_stats.around_start_table())?;
+    fs::write(
+        config.output.join("_around_end.txt"),
+        framing_stats.around_end_table())?;
+    
+
     Ok(())
 }
 
