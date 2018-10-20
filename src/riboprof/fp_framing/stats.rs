@@ -18,7 +18,7 @@ impl FramingStats {
         let len_profile = LenProfile::new_with_default(lengths.start, lengths.end);
         let frames = Frame::new_with_default();
 
-        let flanking_len = flanking.end as usize - min(flanking.end, flanking.start) as usize;
+        let flanking_len = (flanking.end - min(flanking.end, flanking.start)) as usize;
 
         FramingStats {
             frame_length: LenProfile::new(lengths.start, lengths.end, frames),
@@ -87,9 +87,9 @@ impl FramingStats {
 
         fn length_row((len_str, frame): (String, &Frame<usize>), ttl: usize) -> String {
             let len_ttl = frame.iter().sum::<usize>();
-            let p0 = *frame.get(0_isize) as f64 / ttl as f64; 
-            let p1 = *frame.get(1_isize) as f64 / ttl as f64; 
-            let p2 = *frame.get(2_isize) as f64 / ttl as f64; 
+            let p0 = *frame.get(0_isize) as f64 / len_ttl as f64; 
+            let p1 = *frame.get(1_isize) as f64 / len_ttl as f64; 
+            let p2 = *frame.get(2_isize) as f64 / len_ttl as f64; 
             let entropy = -(p0 * p0.log2() + p1 * p1.log2() + p2 * p2.log2());
             let info = 3.0_f64.log2() - entropy;
             
