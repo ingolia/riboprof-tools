@@ -78,6 +78,41 @@ where
     }
 }
 
+impl<R: Eq> Transcript<R>
+{
+    pub fn group_by_gene_vec<'a, I>(trx_iter: I) -> Vec<(&'a R, Vec<&'a Transcript<R>>)>
+        where I: Iterator<Item = &'a Transcript<R>>
+    {
+        let mut groups: Vec<(&'a R, Vec<&'a Transcript<R>>)> = Vec::new();
+
+        for trx in trx_iter {
+            let mut done = false;
+            { 
+                if let Some(gene_trxs) = Self::find_mut(groups.as_mut_slice(), trx.gene_ref()) {
+                    gene_trxs.push(trx);
+                    done = true;
+                }
+            }
+            
+            if !done {
+                groups.push((trx.gene_ref(), vec![trx]));
+            }
+        }
+
+        groups
+    }
+
+    fn find_mut<'a, 'b, S: PartialEq, T>(gs: &'b mut [(&'a S, T)], g: &'a S) -> Option<&'b mut T>
+    {
+        for (x, xs) in gs.iter_mut() {
+            if *x == g {
+                    return Some(xs)
+            }
+        }
+        return None
+    }
+}
+
 impl<R> Transcript<R>
 where
     R: Deref<Target = String>,
