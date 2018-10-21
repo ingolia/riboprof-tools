@@ -64,23 +64,9 @@ impl<R> Transcript<R> {
     }
 }
 
-impl<R> Transcript<R>
-where
-    R: Hash + Eq + Clone,
-{
-    pub fn group_by_gene<'a, I>(trx_iter: I) -> HashMap<R, Vec<&'a Transcript<R>>>
-    where
-        I: Iterator<Item = &'a Transcript<R>> + Sized,
-    {
-        trx_iter
-            .map(|trx| (trx.gene_ref().clone(), trx))
-            .into_group_map()
-    }
-}
-
 impl<R: Eq> Transcript<R>
 {
-    pub fn group_by_gene_vec<'a, I>(trx_iter: I) -> Vec<(&'a R, Vec<&'a Transcript<R>>)>
+    pub fn group_by_gene<'a, I>(trx_iter: I) -> Vec<(&'a R, Vec<&'a Transcript<R>>)>
         where I: Iterator<Item = &'a Transcript<R>>
     {
         let mut groups: Vec<(&'a R, Vec<&'a Transcript<R>>)> = Vec::new();

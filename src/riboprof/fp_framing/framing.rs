@@ -82,8 +82,8 @@ pub fn footprint_framing(
 
     if gene_sets.len() > 1 {
         let is_coding: Vec<bool> = gene_sets
-            .values()
-            .map(|trxs| trxs.iter().any(|trx| trx.is_coding()))
+            .iter()
+            .map(|(_gene, trxs)| trxs.iter().any(|trx| trx.is_coding()))
             .collect();
 
         if is_coding.iter().all(|coding| *coding) {
