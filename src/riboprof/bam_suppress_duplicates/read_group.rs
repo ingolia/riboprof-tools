@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use failure;
 
 use rust_htslib::bam;
@@ -6,14 +8,14 @@ use rust_htslib::prelude::*;
 pub struct ReadGroups<'a> {
     bam_reader: &'a mut bam::Reader,
     next_record: Option<bam::Record>,
-    same_group: &'a Fn(&bam::Record, &bam::Record) -> bool,
+    group_order: &'a Fn(&bam::Record, &bam::Record) -> Ordering,
 }
 
 impl <'a> ReadGroups<'a> {
-    pub fn new(same_group: &'a Fn(&bam::Record, &bam::Record) -> bool,
+    pub fn new(group_order: &'a Fn(&bam::Record, &bam::Record) -> Ordering,
                bam_reader: &'a mut bam::Reader)
                -> Result<Self, failure::Error> {
-        let mut rg = ReadGroups{ bam_reader: bam_reader, next_record: None, same_group: same_group};
+        let mut rg = ReadGroups{ bam_reader: bam_reader, next_record: None, group_order: group_order};
         rg.next_record = rg.read_next_record()?;
         Ok( rg )
     }
@@ -36,11 +38,15 @@ impl <'a> ReadGroups<'a> {
         loop {
             let next = self.read_next_record()?;
             if let Some(rec) = next {
-                if (self.same_group)(&curr_ref, &rec) {
-                    group.push(rec);
-                } else {
-                    self.next_record = Some(rec);
-                    break;
+                match (self.group_order)(&curr_ref, &rec) {
+                    Ordering::Less => {
+                        self.next_record = Some(rec);
+                        break;
+                    },
+                    Ordering::Equal => group.push(rec),
+                    Ordering::Greater => {
+                        return Err(format_err!("Records out of order: {:?} > {:?}", curr_ref, rec));
+                    },
                 }
             } else {
                 self.next_record = None;

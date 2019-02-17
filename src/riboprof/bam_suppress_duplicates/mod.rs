@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -70,12 +71,16 @@ impl Config {
     }
 }
 
-pub fn same_location(r1: &bam::Record, r2: &bam::Record) -> bool {
-    (r1.tid() == r2.tid()) &&
-        (r1.pos() == r2.pos()) &&
-        (r1.is_reverse() == r2.is_reverse())
+pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
+    match r1.tid().cmp(&r2.tid()) {
+        Ordering::Equal => match r1.pos().cmp(&r2.pos()) {
+            Ordering::Equal => r1.is_reverse().cmp(&r2.is_reverse()),
+            ordering => ordering,
+        },
+        ordering => ordering,
+    }
 }
-
+    
 pub fn read_tag(r1: &bam::Record) -> Option<&[u8]> {
     if let Some(delim_pos) = r1.qname().iter().position(|&ch| ch == b'#') {
         Some(r1.qname().split_at(delim_pos + 1).1)
@@ -102,7 +107,7 @@ pub fn same_cigar(r0: &bam::Record, r1: &bam::Record) -> bool {
 }
 
 pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error> {
-    let loc_groups = ReadGroups::new(&same_location, &mut config.input)?;
+    let loc_groups = ReadGroups::new(&cmp_location, &mut config.input)?;
 
     for loc_group_res in loc_groups {
         let loc_group = loc_group_res?;
@@ -127,7 +132,7 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
 
                     let (mut uniq, dups) = tag_class.split_first_mut().unwrap();
 
-                    if config.annotate {
+                    if config.annotate && tag_class_len > 1 {
                         uniq.push_aux(b"ZD", &bam::record::Aux::Integer(tag_class_len as i64))?;
                     }
 
@@ -148,6 +153,10 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
         let mut stats_out = fs::File::create(stats_file)?;
         stats_out.write_all(config.stats.dedup_table().as_bytes())?;
     }
+
+    eprintln!("Processed {} alignments at {} distinct sites", config.stats.total_reads(), config.stats.total_sites());
+    eprintln!("Suppressed {} duplicates at {} distinct sites", config.stats.dupl_reads(), config.stats.dupl_sites());
+    eprintln!("{:>4.1}% unique", 100.0 * (config.stats.unique_reads() as f64) / (config.stats.total_reads() as f64));
     
     Ok(())
 }
