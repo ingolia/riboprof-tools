@@ -50,11 +50,15 @@ impl FramingStats {
     }
 
     pub fn tally_around_start(&mut self, start_offset: isize, fp_length: usize) {
-        self.around_start.get_mut(start_offset).map(|vs_start| *vs_start.get_mut(fp_length) += 1);
+        self.around_start
+            .get_mut(start_offset)
+            .map(|vs_start| *vs_start.get_mut(fp_length) += 1);
     }
 
     pub fn tally_around_end(&mut self, end_offset: isize, fp_length: usize) {
-        self.around_end.get_mut(end_offset).map(|vs_end| *vs_end.get_mut(fp_length) += 1);
+        self.around_end
+            .get_mut(end_offset)
+            .map(|vs_end| *vs_end.get_mut(fp_length) += 1);
     }
 
     pub fn tally_bam_frame(&mut self, bam_frame: &BamFrameResult) {
@@ -65,8 +69,12 @@ impl FramingStats {
                 gene_frame
                     .frame()
                     .map(|fr| self.tally_frame_length(fr as isize, gene_frame.fp_length()));
-                gene_frame.vs_cds_start().map(|start_offset| self.tally_around_start(start_offset, gene_frame.fp_length()));
-                gene_frame.vs_cds_end().map(|end_offset| self.tally_around_end(end_offset, gene_frame.fp_length()));
+                gene_frame.vs_cds_start().map(|start_offset| {
+                    self.tally_around_start(start_offset, gene_frame.fp_length())
+                });
+                gene_frame
+                    .vs_cds_end()
+                    .map(|end_offset| self.tally_around_end(end_offset, gene_frame.fp_length()));
             }
             _ => (),
         };
@@ -74,7 +82,7 @@ impl FramingStats {
 
     pub fn around_start_table(&self) -> String {
         Self::metagene_table(&self.around_start)
-    } 
+    }
 
     pub fn around_end_table(&self) -> String {
         Self::metagene_table(&self.around_end)
@@ -82,21 +90,33 @@ impl FramingStats {
 
     pub fn frame_length_table(&self) -> String {
         let mut table = "length\tfract\tN0\tN1\tN2\tp0\tp1\tp2\tinfo\n".to_string();
-  
-        let ttl = self.frame_length.iter().map(|l| l.iter().sum::<usize>()).sum::<usize>();
+
+        let ttl = self
+            .frame_length
+            .iter()
+            .map(|l| l.iter().sum::<usize>())
+            .sum::<usize>();
 
         fn length_row((len_str, frame): (String, &Frame<usize>), ttl: usize) -> String {
             let len_ttl = frame.iter().sum::<usize>();
-            let p0 = *frame.get(0_isize) as f64 / len_ttl as f64; 
-            let p1 = *frame.get(1_isize) as f64 / len_ttl as f64; 
-            let p2 = *frame.get(2_isize) as f64 / len_ttl as f64; 
+            let p0 = *frame.get(0_isize) as f64 / len_ttl as f64;
+            let p1 = *frame.get(1_isize) as f64 / len_ttl as f64;
+            let p2 = *frame.get(2_isize) as f64 / len_ttl as f64;
             let entropy = -(p0 * p0.log2() + p1 * p1.log2() + p2 * p2.log2());
             let info = 3.0_f64.log2() - entropy;
-            
-            format!("{}\t{:.04}\t{}\t{}\t{}\t{:.04}\t{:.04}\t{:.04}\t{:.02}\n",
-                    len_str, len_ttl as f64 / ttl as f64,
-                    *frame.get(0_isize), *frame.get(1_isize), *frame.get(2_isize),
-                    p0, p1, p2, info)
+
+            format!(
+                "{}\t{:.04}\t{}\t{}\t{}\t{:.04}\t{:.04}\t{:.04}\t{:.02}\n",
+                len_str,
+                len_ttl as f64 / ttl as f64,
+                *frame.get(0_isize),
+                *frame.get(1_isize),
+                *frame.get(2_isize),
+                p0,
+                p1,
+                p2,
+                info
+            )
         }
 
         for line in self.frame_length.named_iter().map(|fl| length_row(fl, ttl)) {
@@ -110,7 +130,7 @@ impl FramingStats {
         let mut pos_iter = table.pos_iter().peekable();
 
         let mut table = "pos\tttl".to_string();
-        
+
         if let Some((_, len_profile)) = pos_iter.peek() {
             for (len_str, _) in len_profile.named_iter() {
                 table += &format!("\t{}", len_str);

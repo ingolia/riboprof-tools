@@ -68,13 +68,16 @@ impl Config {
     }
 
     fn output_filename(&self, suffix: &str) -> PathBuf {
-        let mut name_base = self.output.file_name().map_or_else(|| "".to_string(), |filename| filename.to_string_lossy().to_string());
+        let mut name_base = self.output.file_name().map_or_else(
+            || "".to_string(),
+            |filename| filename.to_string_lossy().to_string(),
+        );
         name_base += suffix;
         let mut filepath = self.output.clone();
         filepath.set_file_name(&name_base);
         filepath
     }
-    
+
     fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>, failure::Error> {
         // ZZZ Handle Trx->Gene mappings
         let mut refids = RefIDSet::new();
@@ -123,7 +126,7 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
 
     // Open (empty) stats output file early to detect errors before processing data.
     let mut stats_file = fs::File::create(&config.output_filename("_framing_stats.txt"))?;
-    
+
     let mut annotate = match config.annotate {
         None => None,
         Some(ref annot_file) => {
@@ -158,14 +161,17 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
 
     fs::write(
         config.output_filename("_frame_length.txt"),
-        framing_stats.frame_length_table())?;
+        framing_stats.frame_length_table(),
+    )?;
     fs::write(
         config.output_filename("_around_start.txt"),
-        framing_stats.around_start_table())?;
+        framing_stats.around_start_table(),
+    )?;
     fs::write(
         config.output_filename("_around_end.txt"),
-        framing_stats.around_end_table())?;
-    
+        framing_stats.around_end_table(),
+    )?;
+
     Ok(())
 }
 

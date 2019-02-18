@@ -77,8 +77,16 @@ impl<T> LenProfile<T> {
         let minlen = self.minlen;
 
         iter::once((format!("<{}", self.minlen), &self.short))
-            .chain(self.len_vec.iter().enumerate().map(move |(i,x)| (format!("{}", i + minlen), x)))
-            .chain(iter::once((format!("≥{}", self.minlen + self.len_vec.len()), &self.long)))
+            .chain(
+                self.len_vec
+                    .iter()
+                    .enumerate()
+                    .map(move |(i, x)| (format!("{}", i + minlen), x)),
+            )
+            .chain(iter::once((
+                format!("≥{}", self.minlen + self.len_vec.len()),
+                &self.long,
+            )))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -88,7 +96,8 @@ impl<T> LenProfile<T> {
 
 impl<'a, T> IntoIterator for &'a LenProfile<T> {
     type Item = &'a T;
-    type IntoIter = iter::Chain<iter::Chain<iter::Once<&'a T>, slice::Iter<'a, T>>, iter::Once<&'a T>>;
+    type IntoIter =
+        iter::Chain<iter::Chain<iter::Once<&'a T>, slice::Iter<'a, T>>, iter::Once<&'a T>>;
 
     fn into_iter(self) -> Self::IntoIter {
         iter::once(&self.short)
@@ -100,7 +109,7 @@ impl<'a, T> IntoIterator for &'a LenProfile<T> {
 impl<T> IntoIterator for LenProfile<T> {
     type Item = T;
     type IntoIter = iter::Chain<iter::Chain<iter::Once<T>, vec::IntoIter<T>>, iter::Once<T>>;
-    
+
     fn into_iter(self) -> Self::IntoIter {
         iter::once(self.short)
             .chain(self.len_vec.into_iter())
@@ -110,7 +119,7 @@ impl<T> IntoIterator for LenProfile<T> {
 
 #[derive(Clone, Debug)]
 pub struct Frame<T> {
-    frames: Vec<T>
+    frames: Vec<T>,
 }
 
 impl<T: Clone> Frame<T> {
@@ -146,7 +155,7 @@ impl<T> Frame<T> {
     }
 
     pub fn frame_iter(&self) -> impl Iterator<Item = (isize, &T)> {
-        self.frames.iter().enumerate().map(|(i,x)| (i as isize,x))
+        self.frames.iter().enumerate().map(|(i, x)| (i as isize, x))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -156,7 +165,7 @@ impl<T> Frame<T> {
 
 impl<'a, T> IntoIterator for &'a Frame<T> {
     type Item = &'a T;
-    type IntoIter = slice::Iter<'a,T>;
+    type IntoIter = slice::Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.frames.iter()
@@ -166,12 +175,11 @@ impl<'a, T> IntoIterator for &'a Frame<T> {
 impl<T> IntoIterator for Frame<T> {
     type Item = T;
     type IntoIter = vec::IntoIter<T>;
-    
+
     fn into_iter(self) -> Self::IntoIter {
         self.frames.into_iter()
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct Metagene<T> {
@@ -219,7 +227,10 @@ impl<T> Metagene<T> {
     }
 
     pub fn pos_iter(&self) -> impl Iterator<Item = (isize, &T)> {
-        self.pos_vec.iter().enumerate().map(move |(i, x)| (i as isize + self.start, x))
+        self.pos_vec
+            .iter()
+            .enumerate()
+            .map(move |(i, x)| (i as isize + self.start, x))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -229,7 +240,7 @@ impl<T> Metagene<T> {
 
 impl<'a, T> IntoIterator for &'a Metagene<T> {
     type Item = &'a T;
-    type IntoIter = slice::Iter<'a,T>;
+    type IntoIter = slice::Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.pos_vec.iter()
@@ -239,7 +250,7 @@ impl<'a, T> IntoIterator for &'a Metagene<T> {
 impl<T> IntoIterator for Metagene<T> {
     type Item = T;
     type IntoIter = vec::IntoIter<T>;
-    
+
     fn into_iter(self) -> Self::IntoIter {
         self.pos_vec.into_iter()
     }

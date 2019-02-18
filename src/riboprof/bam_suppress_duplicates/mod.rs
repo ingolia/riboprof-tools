@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -50,16 +49,14 @@ impl Config {
         } else {
             bam::Writer::from_path(Path::new(&cli.bam_output), &header)?
         };
-        
+
         let dups_out = match cli.bam_dups {
             None => None,
-            Some(ref dups_file) => {
-                Some(bam::Writer::from_path(Path::new(&dups_file), &header)?)
-            }
+            Some(ref dups_file) => Some(bam::Writer::from_path(Path::new(&dups_file), &header)?),
         };
-        
+
         let stats = Stats::new(DEFAULT_NLIM);
-        
+
         Ok(Config {
             input: input,
             uniq_output: uniq_out,
@@ -80,7 +77,7 @@ pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
         ordering => ordering,
     }
 }
-    
+
 pub fn read_tag(r1: &bam::Record) -> Option<&[u8]> {
     if let Some(delim_pos) = r1.qname().iter().position(|&ch| ch == b'#') {
         Some(r1.qname().split_at(delim_pos + 1).1)
@@ -119,7 +116,7 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
 
             let mut n_total = 0;
             let mut n_unique = 0;
-            
+
             for mut tag_class in tag_classes.classes() {
                 if read_tag(tag_class.first().unwrap()).is_none() {
                     assert!(tag_class.len() == 1);
@@ -148,15 +145,27 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
             }
         }
     }
-    
+
     if let Some(ref stats_file) = config.stat_file {
         let mut stats_out = fs::File::create(stats_file)?;
         stats_out.write_all(config.stats.dedup_table().as_bytes())?;
     }
 
-    eprintln!("Processed {} alignments at {} distinct sites", config.stats.total_reads(), config.stats.total_sites());
-    eprintln!("Suppressed {} duplicates at {} distinct sites", config.stats.dupl_reads(), config.stats.dupl_sites());
-    eprintln!("{:>4.1}% unique", 100.0 * (config.stats.unique_reads() as f64) / (config.stats.total_reads() as f64));
-    
+    eprintln!(
+        "Processed {} tagged alignments at {} distinct sites, plus {} untagged alignments",
+        config.stats.total_reads(),
+        config.stats.total_sites(),
+        config.stats.untagged_reads()
+    );
+    eprintln!(
+        "Suppressed {} duplicates at {} distinct sites",
+        config.stats.dupl_reads(),
+        config.stats.dupl_sites()
+    );
+    eprintln!(
+        "{:>4.1}% unique",
+        100.0 * (config.stats.unique_reads() as f64) / (config.stats.total_reads() as f64)
+    );
+
     Ok(())
 }

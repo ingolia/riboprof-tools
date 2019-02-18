@@ -78,7 +78,11 @@ pub fn footprint_framing(
     fp: &Spliced<Rc<String>, ReqStrand>,
     cdsbody: &(isize, isize),
 ) -> FpFrameResult {
-    let gene_sets = Transcript::group_by_gene(trxome.find_at_loc(fp).filter(|trx| trx.loc().strand() == fp.strand()));
+    let gene_sets = Transcript::group_by_gene(
+        trxome
+            .find_at_loc(fp)
+            .filter(|trx| trx.loc().strand() == fp.strand()),
+    );
 
     if gene_sets.len() > 1 {
         let is_coding: Vec<bool> = gene_sets

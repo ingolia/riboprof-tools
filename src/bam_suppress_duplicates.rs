@@ -1,6 +1,5 @@
-extern crate failure;
-#[macro_use]
 extern crate clap;
+extern crate failure;
 
 extern crate riboprof;
 
@@ -58,7 +57,7 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .long("duplicates")
                 .value_name("DUPLICATES.BAM")
                 .help("BAM format file of duplicates")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("stats")
@@ -67,13 +66,13 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .long("statistics")
                 .value_name("STATS.TXT")
                 .help("Output file with duplicate statistics")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("annotate")
                 .short("a")
                 .long("annotate")
-                .help("Annotate deduplicated reads")
+                .help("Annotate deduplicated reads"),
         )
         .get_matches();
 

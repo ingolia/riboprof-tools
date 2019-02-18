@@ -12,7 +12,6 @@ use clap::{App, Arg};
 use riboprof::fp_framing::*;
 
 fn main() {
-
     match wrapper() {
         Err(e) => {
             io::stderr().write(format!("{}\n", e).as_bytes()).unwrap();

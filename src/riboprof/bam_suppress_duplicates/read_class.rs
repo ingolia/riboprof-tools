@@ -5,10 +5,12 @@ pub struct ReadClass<'a> {
     same_class: &'a Fn(&bam::Record, &bam::Record) -> bool,
 }
 
-impl <'a> ReadClass<'a> {
+impl<'a> ReadClass<'a> {
     pub fn new(same_class: &'a Fn(&bam::Record, &bam::Record) -> bool) -> Self {
-        ReadClass { classes: Vec::new(),
-                    same_class: same_class }
+        ReadClass {
+            classes: Vec::new(),
+            same_class: same_class,
+        }
     }
 
     pub fn insert(&mut self, r: bam::Record) {
@@ -23,12 +25,15 @@ impl <'a> ReadClass<'a> {
     }
 
     pub fn insert_all<I>(&mut self, iter: I)
-        where I: Iterator<Item = bam::Record>
+    where
+        I: Iterator<Item = bam::Record>,
     {
         for r in iter {
             self.insert(r);
         }
     }
 
-    pub fn classes(self) -> Vec<Vec<bam::Record>> { self.classes }
+    pub fn classes(self) -> Vec<Vec<bam::Record>> {
+        self.classes
+    }
 }

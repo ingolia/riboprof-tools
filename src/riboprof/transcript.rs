@@ -8,7 +8,6 @@ use std::num::ParseIntError;
 use std::ops::{Deref, Range};
 
 use failure;
-use itertools::Itertools;
 
 use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
@@ -64,22 +63,22 @@ impl<R> Transcript<R> {
     }
 }
 
-impl<R: Eq> Transcript<R>
-{
+impl<R: Eq> Transcript<R> {
     pub fn group_by_gene<'a, I>(trx_iter: I) -> Vec<(&'a R, Vec<&'a Transcript<R>>)>
-        where I: Iterator<Item = &'a Transcript<R>>
+    where
+        I: Iterator<Item = &'a Transcript<R>>,
     {
         let mut groups: Vec<(&'a R, Vec<&'a Transcript<R>>)> = Vec::new();
 
         for trx in trx_iter {
             let mut done = false;
-            { 
+            {
                 if let Some(gene_trxs) = Self::find_mut(groups.as_mut_slice(), trx.gene_ref()) {
                     gene_trxs.push(trx);
                     done = true;
                 }
             }
-            
+
             if !done {
                 groups.push((trx.gene_ref(), vec![trx]));
             }
@@ -88,14 +87,13 @@ impl<R: Eq> Transcript<R>
         groups
     }
 
-    fn find_mut<'a, 'b, S: PartialEq, T>(gs: &'b mut [(&'a S, T)], g: &'a S) -> Option<&'b mut T>
-    {
+    fn find_mut<'a, 'b, S: PartialEq, T>(gs: &'b mut [(&'a S, T)], g: &'a S) -> Option<&'b mut T> {
         for (x, xs) in gs.iter_mut() {
             if *x == g {
-                    return Some(xs)
+                return Some(xs);
             }
         }
-        return None
+        return None;
     }
 }
 
