@@ -7,11 +7,11 @@ use failure;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
-mod read_class;
+mod record_class;
 mod record_group;
 mod stats;
 
-use bam_suppress_duplicates::read_class::*;
+use bam_suppress_duplicates::record_class::*;
 use bam_suppress_duplicates::record_group::*;
 use bam_suppress_duplicates::stats::*;
 
@@ -97,10 +97,10 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
 
     for loc_group_res in loc_groups {
         let loc_group = loc_group_res?;
-        let mut cigar_classes = ReadClass::new(&same_cigar);
+        let mut cigar_classes = RecordClass::new(&same_cigar);
         cigar_classes.insert_all(loc_group.into_iter());
         for cigar_class in cigar_classes.classes() {
-            let mut tag_classes = ReadClass::new(&same_tag);
+            let mut tag_classes = RecordClass::new(&same_tag);
             tag_classes.insert_all(cigar_class.into_iter());
 
             let mut n_total = 0;
