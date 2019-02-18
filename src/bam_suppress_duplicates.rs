@@ -32,6 +32,7 @@ fn get_cli() -> Result<CLI, failure::Error> {
         .version("0.1.0")
         .author("Nick Ingolia <ingolia@berkeley.edu>")
         .about("Suppress likely PCR duplicates based on UMIs embedded in sequence names")
+        .long_about("Identifies and removes likely PCR duplicates. Duplicates are identified based on a nucleotide tag at the end of the read name stored in the BAM file, separated from the rest of the read name by a \"#\". Reads with no tag are not subject to deduplication. When multiple reads aligning to the same position share the same nucleotide tag, one is selected arbitrarily and written as the \"unique\" representative and, if specified, the rest are written to the file of duplicates. Optionally, the unique representative can be tagged with a \"ZD\" tag indicating the total number of duplicate reads (always 2 or more) at that position. Optionally, a table of duplicate suppression statistics can be written as a tab-separated file, tabulating the duplicate status of each distinct mapping site. In this statistics file, the first column is the total number of reads aligned to the site, the second is the number of unique reads, and the third is the count of distinct sites. Thus, \"1  1  234\" would indicate 234 distinct positions with a single unique read, \"2  2  17\" would indicate 17 distinct positions with two unique reads, and \"2  1  5\" would indicate 5 positions with a single duplicated read (2 reads total, 1 unique).")
         .arg(
             Arg::with_name("bam_input")
                 .short("i")
