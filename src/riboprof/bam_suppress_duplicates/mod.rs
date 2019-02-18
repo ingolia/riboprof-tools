@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -9,11 +8,11 @@ use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
 mod read_class;
-mod read_group;
+mod record_group;
 mod stats;
 
 use bam_suppress_duplicates::read_class::*;
-use bam_suppress_duplicates::read_group::*;
+use bam_suppress_duplicates::record_group::*;
 use bam_suppress_duplicates::stats::*;
 
 pub struct CLI {
@@ -68,16 +67,6 @@ impl Config {
     }
 }
 
-pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
-    match r1.tid().cmp(&r2.tid()) {
-        Ordering::Equal => match r1.pos().cmp(&r2.pos()) {
-            Ordering::Equal => r1.is_reverse().cmp(&r2.is_reverse()),
-            ordering => ordering,
-        },
-        ordering => ordering,
-    }
-}
-
 pub fn read_tag(r1: &bam::Record) -> Option<&[u8]> {
     if let Some(delim_pos) = r1.qname().iter().position(|&ch| ch == b'#') {
         Some(r1.qname().split_at(delim_pos + 1).1)
@@ -104,7 +93,7 @@ pub fn same_cigar(r0: &bam::Record, r1: &bam::Record) -> bool {
 }
 
 pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error> {
-    let loc_groups = ReadGroups::new(&cmp_location, &mut config.input)?;
+    let loc_groups = RecordGroups::new_by_location(&mut config.input)?;
 
     for loc_group_res in loc_groups {
         let loc_group = loc_group_res?;
