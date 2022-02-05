@@ -34,8 +34,8 @@ fn get_cli() -> Result<CLI, failure::Error> {
         .author("Nick Ingolia <ingolia@berkeley.edu>")
         .about("Split FastQ file using index and random nucleotides")
         .arg(
-            Arg::with_name("output_dir")
-                .short("o")
+            Arg::new("output_dir")
+                .short('o')
                 .long("output-dir")
                 .value_name("OUTPUT-DIR")
                 .help("Output directory name")
@@ -43,8 +43,8 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .required(true),
         )
         .arg(
-            Arg::with_name("min_insert")
-                .short("m")
+            Arg::new("min_insert")
+                .short('m')
                 .long("min-insert")
                 .value_name("MIN-INSERT")
                 .help("Minimum insert length")
@@ -52,8 +52,8 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .default_value("0"),
         )
         .arg(
-            Arg::with_name("prefix")
-                .short("p")
+            Arg::new("prefix")
+                .short('p')
                 .long("prefix")
                 .value_name("PREFIX")
                 .help("Prefix format string")
@@ -61,8 +61,8 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .default_value(""),
         )
         .arg(
-            Arg::with_name("suffix")
-                .short("x")
+            Arg::new("suffix")
+                .short('x')
                 .long("suffix")
                 .value_name("SUFFIX")
                 .help("Suffix format string")
@@ -70,8 +70,8 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .default_value(""),
         )
         .arg(
-            Arg::with_name("sample_sheet")
-                .short("s")
+            Arg::new("sample_sheet")
+                .short('s')
                 .long("sample-sheet")
                 .value_name("SAMPLESHEET.CSV")
                 .help("File name of CSV-format sample sheet")
@@ -79,14 +79,14 @@ fn get_cli() -> Result<CLI, failure::Error> {
                 .required(true),
         )
         .arg(
-            Arg::with_name("progress")
+            Arg::new("progress")
                 .long("progress")
                 .value_name("NSEQS")
                 .help("Report progress every NSEQS sequences")
                 .takes_value(true)
                 .default_value("0"),
         )
-        .arg(Arg::with_name("input").multiple(true).required(true))
+        .arg(Arg::new("input").multiple_occurrences(true).required(true).allow_invalid_utf8(true))
         .get_matches();
 
     Ok(CLI {
