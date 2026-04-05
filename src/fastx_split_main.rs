@@ -7,7 +7,7 @@ use std::io;
 use std::io::Write;
 use std::process;
 
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command, value_parser};
 
 use riboprof::fastx_split::*;
 
@@ -43,6 +43,7 @@ fn get_cli() -> Result<CLI, failure::Error> {
         )
         .arg(
             Arg::new("min_insert")
+                .value_parser(value_parser!(usize))
                 .short('m')
                 .long("min-insert")
                 .value_name("MIN-INSERT")
@@ -79,6 +80,7 @@ fn get_cli() -> Result<CLI, failure::Error> {
         )
         .arg(
             Arg::new("progress")
+                .value_parser(value_parser!(usize))
                 .long("progress")
                 .value_name("NSEQS")
                 .help("Report progress every NSEQS sequences")
