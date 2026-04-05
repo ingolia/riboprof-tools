@@ -2,9 +2,10 @@
 name = "riboprof-tools"
 version = "0.1.0"
 authors = ["Nicholas Ingolia <ingolia@berkeley.edu>"]
+edition = "2024"
 
 [dependencies]
-bio = { git = "https://github.com/rust-bio/rust-bio" }
+bio = "*"
 rust-htslib = "*"
 itertools = "*"
 csv = "*"
