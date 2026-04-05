@@ -101,10 +101,8 @@ impl ASites {
         L::Strand: Into<ReqStrand> + Copy,
         L::RefID: Clone,
     {
-        match self.offset(fp.length()) {
-            Some(offset) => fp.pos_outof(&Pos::new((), offset as isize, ReqStrand::Forward)),
-            None => None,
-        }
+        self.offset(fp.length())
+            .and_then(|offset| fp.pos_outof(&Pos::new((), offset as isize, ReqStrand::Forward)))
     }
 }
 
@@ -115,7 +113,7 @@ impl FromStr for ASites {
         let mut offsets = Vec::new();
         let re = Regex::new("^(\\d+)\t(\\d+)$").unwrap();
 
-        for line in table.lines().map(str::trim_right) {
+        for line in table.lines().map(str::trim_end) {
             let cap = re
                 .captures(line)
                 .ok_or_else(|| ASiteParseError::BadLine(line.to_string()))?;
@@ -166,12 +164,11 @@ mod tests {
     extern crate csv;
 
     use super::*;
+    use crate::transcript::{Transcriptome, TrxPos};
 
-    use std::cell::*;
+    use std::hash::Hash;
     use std::ops::*;
     use std::rc::*;
-
-    use self::csv::Error;
 
     use bio::io::bed;
     use bio_types::annot::refids::*;
@@ -188,12 +185,7 @@ mod tests {
     {
         let pos: Pos<R, ReqStrand> = posstr.parse().expect("Parsing position");
         let mut trxposns: Vec<(String, usize)> = TrxPos::transcriptome_pos(tome, &pos)
-            .map(|trxpos| {
-                (
-                    trxpos.transcript().trxname().deref().to_string(),
-                    trxpos.pos(),
-                )
-            })
+            .map(|trxpos| (trxpos.transcript().trxname().to_string(), trxpos.pos()))
             .collect();
         trxposns.sort();
         trxposns
@@ -211,7 +203,6 @@ chr03	500	1500	EEE	0	+	600	1200	0	2	250,450	0,550
         let tome = transcriptome_from_str(&beds);
 
         let none: Vec<(String, usize)> = Vec::new();
-        let aaa = "AAA".to_string();
         assert_eq!(
             trxpos_at_pos(&tome, "chr01:1000(+)"),
             vec![("AAA".to_string(), 0)]

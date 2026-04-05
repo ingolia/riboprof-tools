@@ -11,9 +11,9 @@ mod linkers;
 mod sample;
 mod sample_sheet;
 
-use fastx_split::linkers::*;
-use fastx_split::sample::*;
-use fastx_split::sample_sheet::*;
+use crate::fastx_split::linkers::*;
+use crate::fastx_split::sample::*;
+use crate::fastx_split::sample_sheet::*;
 
 pub struct CLI {
     pub fastx_inputs: Vec<String>,
@@ -48,14 +48,14 @@ impl Config {
         let unknown_sample = Sample::new(
             "UnknownIndex".to_string(),
             vec![b'N'; index_length],
-            Config::create_writer(&output_dir, "UnknownIndex")?,
+            Config::create_writer(&output_dir.as_path(), "UnknownIndex")?,
         );
 
         let mut sample_map = SampleMap::new(index_length, unknown_sample);
 
         let sample_sheet_txt = fs::read_to_string(&cli.sample_sheet)?;
         for (name, index) in parse_sample_sheet(&sample_sheet_txt)?.into_iter() {
-            let output_file = Config::create_writer(&output_dir, &name)?;
+            let output_file = Config::create_writer(&output_dir.as_path(), &name)?;
             let sample = Sample::new(
                 name.to_string(),
                 index.to_string().into_bytes(),
@@ -64,7 +64,8 @@ impl Config {
             sample_map.insert(index.into_bytes(), true, sample)?;
         }
 
-        let short_file = fastq::Writer::new(Config::create_writer(&output_dir, "tooshort")?);
+        let short_file =
+            fastq::Writer::new(Config::create_writer(&output_dir.as_path(), "tooshort")?);
 
         let mut mapping_file = output_dir.clone();
         mapping_file.push("mapping.txt");
@@ -100,7 +101,7 @@ pub fn split_file<P: AsRef<Path>>(
     let mut total = 0;
     let mut tooshort = 0;
 
-    let input_reader: Box<Read> = if input_name.as_ref() == Path::new("-") {
+    let input_reader: Box<dyn Read> = if input_name.as_ref() == Path::new("-") {
         Box::new(io::stdin())
     } else {
         Box::new(fs::File::open(&input_name)?)

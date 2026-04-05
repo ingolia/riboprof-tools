@@ -7,21 +7,20 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str;
 
-use failure;
-
 use bio::io::bed;
 use bio_types::annot::refids::RefIDSet;
+use failure;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
-use bam_utils::*;
-use transcript::*;
+use crate::bam_utils::*;
+use crate::transcript::*;
 
 mod framing;
 mod stats;
 
-use fp_framing::framing::*;
-use fp_framing::stats::*;
+use crate::fp_framing::framing::*;
+use crate::fp_framing::stats::*;
 
 pub struct CLI {
     pub input: String,
@@ -83,7 +82,10 @@ impl Config {
         let mut refids = RefIDSet::new();
         let mut trxome = Transcriptome::new();
 
-        for recres in bed::Reader::from_file(&cli.bed)?.records() {
+        let mut bed_reader =
+            bed::Reader::from_file(&cli.bed).map_err(|e| format_err!("{:?}", e))?;
+
+        for recres in bed_reader.records() {
             let rec = recres?;
             let trx = Transcript::from_bed12(&rec, &mut refids)?;
             trxome.insert(trx)?;
@@ -128,10 +130,14 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
     let mut stats_file = fs::File::create(&config.output_filename("_framing_stats.txt"))?;
 
     let mut annotate = match config.annotate {
-        None => None,
+        Option::None => None,
         Some(ref annot_file) => {
             let header = bam::Header::from_template(input.header());
-            Some(bam::Writer::from_path(Path::new(&annot_file), &header)?)
+            Some(bam::Writer::from_path(
+                Path::new(&annot_file),
+                &header,
+                bam::Format::Bam,
+            )?)
         }
     };
 
@@ -151,8 +157,11 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
 
         framing_stats.tally_bam_frame(&res);
 
-        if let Some(ref mut ann_writer) = &mut annotate {
-            rec.push_aux(b"ZF", &bam::record::Aux::String(&res.aux()))?;
+        if let Some(ann_writer) = &mut annotate {
+            rec.push_aux(
+                b"ZF",
+                bam::record::Aux::String(std::str::from_utf8(&res.aux())?),
+            )?;
             ann_writer.write(&rec)?;
         }
     }

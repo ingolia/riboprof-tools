@@ -1,9 +1,9 @@
 use std::cmp::min;
 use std::ops::Range;
 
-use metagene::*;
+use crate::metagene::*;
 
-use fp_framing::framing::*;
+use crate::fp_framing::framing::*;
 
 pub struct FramingStats {
     frame_length: LenProfile<Frame<usize>>,

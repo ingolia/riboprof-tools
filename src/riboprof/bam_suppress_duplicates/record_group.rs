@@ -3,18 +3,17 @@ use std::cmp::Ordering;
 use failure;
 
 use rust_htslib::bam;
-use rust_htslib::prelude::*;
+use rust_htslib::bam::Read;
 
 /// Groups of records from a sorted BAM file. Record groups must be
-/// sorted in ascending order based on the grouping key.
+/// sorted in ascending order based on the location.
 pub struct RecordGroups<'a> {
     bam_reader: &'a mut bam::Reader,
     next_record: Option<bam::Record>,
-    group_order: &'a Fn(&bam::Record, &bam::Record) -> Ordering,
 }
 
 impl<'a> RecordGroups<'a> {
-    /// Create a grouping iterator that uses a provided equivalence /
+    /// Create a grouping iterator that uses a location
     /// ordering function to collect individual records into
     /// groups. Records are grouped when they are `Ordering::Equal`
     /// and must be non-decreasing, i.e., the next record after a
@@ -23,49 +22,27 @@ impl<'a> RecordGroups<'a> {
     ///
     /// # Arguments
     ///
-    /// * `group_order` provides an ordering for record groups.
-    /// 
     /// * `bam_reader` iterates over individual records.
     ///
     /// # Errors
-    /// 
+    ///
     /// An error variant is returned when an error arises reading the
     /// first record from the nested `bam_reader` iterator.
-    pub fn new(
-        group_order: &'a Fn(&bam::Record, &bam::Record) -> Ordering,
-        bam_reader: &'a mut bam::Reader,
-    ) -> Result<Self, failure::Error> {
+    pub fn new(bam_reader: &'a mut bam::Reader) -> Result<Self, failure::Error> {
         let mut rg = RecordGroups {
             bam_reader: bam_reader,
             next_record: None,
-            group_order: group_order,
         };
         rg.next_record = rg.read_next_record()?;
         Ok(rg)
     }
 
-    /// Creates a record grouping iterator for BAM records sorted by
-    /// location according to the ordering provided by `samtools
-    /// sort`, as implemented by `RecordGroup::cmp_location`.
-    ///
-    /// # Arguments
-    /// 
-    /// * `bam_reader` iterates over individual records.
-    ///
-    /// # Errors
-    ///
-    /// An error variant is returned when an error arises reading the
-    /// first record from the nested `bam_reader` iterator.
-    pub fn new_by_location(bam_reader: &'a mut bam::Reader) -> Result<Self, failure::Error> {
-        Self::new(&Self::cmp_location, bam_reader)
-    }
-
     fn read_next_record(&mut self) -> Result<Option<bam::Record>, failure::Error> {
         let mut rec = bam::Record::new();
         match self.bam_reader.read(&mut rec) {
-            Ok(()) => Ok(Some(rec)),
-            Err(bam::ReadError::NoMoreRecord) => Ok(None),
-            Err(e) => Err(e.into()),
+            Some(Ok(())) => Ok(Some(rec)),
+            Option::None => Ok(None),
+            Some(Err(e)) => Err(e.into()),
         }
     }
 
@@ -77,7 +54,7 @@ impl<'a> RecordGroups<'a> {
         loop {
             let next = self.read_next_record()?;
             if let Some(rec) = next {
-                match (self.group_order)(&curr_ref, &rec) {
+                match cmp_location(&curr_ref, &rec) {
                     Ordering::Less => {
                         self.next_record = Some(rec);
                         break;
@@ -99,19 +76,19 @@ impl<'a> RecordGroups<'a> {
 
         Ok(group)
     }
+}
 
-    /// Compare BAM records according to location. This ordering
-    /// should be consistent with the ordering from `samtools
-    /// sort`. Reads are ordered first by reference target sequence
-    /// ID, then by position, and then by strand.
-    pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
-        match r1.tid().cmp(&r2.tid()) {
-            Ordering::Equal => match r1.pos().cmp(&r2.pos()) {
-                Ordering::Equal => r1.is_reverse().cmp(&r2.is_reverse()),
-                ordering => ordering,
-            },
+/// Compare BAM records according to location. This ordering
+/// should be consistent with the ordering from `samtools
+/// sort`. Reads are ordered first by reference target sequence
+/// ID, then by position, and then by strand.
+pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
+    match r1.tid().cmp(&r2.tid()) {
+        Ordering::Equal => match r1.pos().cmp(&r2.pos()) {
+            Ordering::Equal => r1.is_reverse().cmp(&r2.is_reverse()),
             ordering => ordering,
-        }
+        },
+        ordering => ordering,
     }
 }
 

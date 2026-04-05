@@ -1,6 +1,6 @@
 use std::cell::*;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::error;
 use std::fmt;
 use std::rc::Rc;
@@ -94,7 +94,7 @@ impl<T> SampleMap<T> {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, index: &[u8]) -> Result<Ref<T>, failure::Error> {
+    pub fn get(&self, index: &[u8]) -> Result<Ref<'_, T>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
@@ -104,7 +104,7 @@ impl<T> SampleMap<T> {
         Ok(thing)
     }
 
-    pub fn get_mut(&mut self, index: &[u8]) -> Result<RefMut<T>, failure::Error> {
+    pub fn get_mut(&mut self, index: &[u8]) -> Result<RefMut<'_, T>, failure::Error> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }

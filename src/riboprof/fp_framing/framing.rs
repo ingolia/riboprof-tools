@@ -9,9 +9,9 @@ use bio_types::annot::spliced::Spliced;
 use bio_types::strand::*;
 use rust_htslib::bam;
 
-use bam_utils::*;
+use crate::bam_utils::*;
 //use codon_assign::*;
-use transcript::*;
+use crate::transcript::*;
 
 pub fn record_framing(
     trxome: &Transcriptome<Rc<String>>,
@@ -42,7 +42,7 @@ pub fn record_framing(
 }
 
 pub fn is_single_hit(rec: &bam::Record) -> bool {
-    if let Some(bam::record::Aux::Integer(nh)) = rec.aux(b"NH") {
+    if let Ok(bam::record::Aux::I32(nh)) = rec.aux(b"NH") {
         nh == 1
     } else {
         true
@@ -50,7 +50,7 @@ pub fn is_single_hit(rec: &bam::Record) -> bool {
 }
 
 pub fn is_first_hit(rec: &bam::Record) -> bool {
-    rec.aux(b"HI") == Some(bam::record::Aux::Integer(1))
+    rec.aux(b"HI") == Ok(bam::record::Aux::I32(1))
 }
 
 pub enum BamFrameResult {
@@ -304,12 +304,12 @@ mod tests {
     use bio_types::annot::contig::*;
     use bio_types::annot::pos::*;
     use bio_types::annot::refids::RefIDSet;
-    use bio_types::annot::spliced::*;
 
     fn fp(fp_str: &str) -> Spliced<Rc<String>, ReqStrand> {
         fp_str.parse().unwrap()
     }
 
+    #[allow(dead_code)]
     fn pos(pos_str: &str) -> Pos<Rc<String>, ReqStrand> {
         pos_str.parse().unwrap()
     }
@@ -328,6 +328,7 @@ mod tests {
         Transcript::from_bed12(&rec, &mut refids).expect("Converting to transcript")
     }
 
+    #[allow(dead_code)]
     fn transcriptome_from_str(bedstr: &str) -> Transcriptome<Rc<String>> {
         let mut refids = RefIDSet::new();
         Transcriptome::new_from_bed(bed::Reader::new(bedstr.as_bytes()).records(), &mut refids)
@@ -562,12 +563,12 @@ mod tests {
 
     fn validate_framing(trx: &Transcript<Rc<String>>, fplen: isize, cdsbody: (isize, isize)) {
         for i in 0..(trx.loc().exon_total_length() as isize - fplen) {
-            let trx_first = Pos::new(trx.trxname().clone(), i, ReqStrand::Forward);
+            let trx_first = Pos::new(trx.trxname(), i, ReqStrand::Forward);
             let chr_first = trx
                 .loc()
                 .pos_outof(&trx_first)
                 .expect(&format!("Cannot pull fp start {} @ {} out", trx_first, i));
-            let trx_last = Pos::new(trx.trxname().clone(), i + fplen - 1, ReqStrand::Forward);
+            let trx_last = Pos::new(trx.trxname(), i + fplen - 1, ReqStrand::Forward);
             let chr_last = trx
                 .loc()
                 .pos_outof(&trx_last)

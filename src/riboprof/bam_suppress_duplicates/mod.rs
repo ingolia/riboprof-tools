@@ -11,9 +11,9 @@ mod record_class;
 mod record_group;
 mod stats;
 
-use bam_suppress_duplicates::record_class::*;
-use bam_suppress_duplicates::record_group::*;
-use bam_suppress_duplicates::stats::*;
+use crate::bam_suppress_duplicates::record_class::*;
+use crate::bam_suppress_duplicates::record_group::*;
+use crate::bam_suppress_duplicates::stats::*;
 
 pub struct CLI {
     pub bam_input: String,
@@ -44,15 +44,18 @@ impl Config {
 
         let header = bam::Header::from_template(input.header());
         let uniq_out = if cli.bam_output == "-" {
-            bam::Writer::from_stdout(&header)?
+            bam::Writer::from_stdout(&header, bam::Format::Bam)?
         } else {
-            bam::Writer::from_path(Path::new(&cli.bam_output), &header)?
+            bam::Writer::from_path(Path::new(&cli.bam_output), &header, bam::Format::Bam)?
         };
 
-        let dups_out = match cli.bam_dups {
-            None => None,
-            Some(ref dups_file) => Some(bam::Writer::from_path(Path::new(&dups_file), &header)?),
-        };
+        let dups_out = cli
+            .bam_dups
+            .as_ref()
+            .map(|dups_file| {
+                bam::Writer::from_path(Path::new(&dups_file), &header, bam::Format::Bam)
+            })
+            .transpose()?;
 
         let stats = Stats::new(DEFAULT_NLIM);
 
@@ -79,7 +82,7 @@ pub fn read_tag(r1: &bam::Record) -> Option<&[u8]> {
 pub fn same_tag(r0: &bam::Record, r1: &bam::Record) -> bool {
     if let Some(tag0) = read_tag(r0) {
         if let Some(tag1) = read_tag(r1) {
-            (tag0 == tag1)
+            tag0 == tag1
         } else {
             false
         }
@@ -93,10 +96,10 @@ pub fn same_cigar(r0: &bam::Record, r1: &bam::Record) -> bool {
 }
 
 pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error> {
-    let loc_groups = RecordGroups::new_by_location(&mut config.input)?;
+    let loc_groups = RecordGroups::new(&mut config.input)?;
 
     for loc_group_res in loc_groups {
-        let loc_group = loc_group_res?;
+        let loc_group: Vec<bam::Record> = loc_group_res?;
         let mut cigar_classes = RecordClass::new(&same_cigar);
         cigar_classes.insert_all(loc_group.into_iter());
         for cigar_class in cigar_classes.classes() {
@@ -116,10 +119,10 @@ pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error>
                     n_total += tag_class_len;
                     n_unique += 1;
 
-                    let (mut uniq, dups) = tag_class.split_first_mut().unwrap();
+                    let (uniq, dups) = tag_class.split_first_mut().unwrap();
 
                     if config.annotate && tag_class_len > 1 {
-                        uniq.push_aux(b"ZD", &bam::record::Aux::Integer(tag_class_len as i64))?;
+                        uniq.push_aux(b"ZD", bam::record::Aux::I32(tag_class_len as i32))?;
                     }
 
                     config.uniq_output.write(uniq)?;
