@@ -5,15 +5,12 @@ use std::num::ParseIntError;
 use std::path::Path;
 use std::str::FromStr;
 
-use failure;
+use anyhow::Result;
 use regex::Regex;
 
 use bio_types::annot::loc::*;
 use bio_types::annot::pos::*;
 use bio_types::strand::*;
-//use rust_htslib::bam::record::Record;
-
-//use transcript::*;
 
 /// Mapping of A site positions within a footprint, based on fragment
 /// length.
@@ -39,7 +36,7 @@ impl ASites {
     /// An error variant is returned when an `io::Error` arises
     /// reading the file or when an `ASiteParseError` arises in
     /// parsing it.
-    pub fn new_from_file<P: AsRef<Path>>(path: P) -> Result<Self, failure::Error> {
+    pub fn new_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Self::from_str(&fs::read_to_string(path)?).map_err(|e| e.into())
     }
 

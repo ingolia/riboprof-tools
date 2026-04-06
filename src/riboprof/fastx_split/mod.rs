@@ -3,8 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str;
 
-use failure;
-
+use anyhow::{Result, anyhow};
 use bio::io::fastq;
 
 mod linkers;
@@ -36,7 +35,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
+    pub fn new(cli: &CLI) -> Result<Self> {
         let linker_spec = LinkerSpec::new(&cli.prefix, &cli.suffix)?;
         let index_length = linker_spec.sample_index_length();
 
@@ -86,7 +85,7 @@ impl Config {
         })
     }
 
-    fn create_writer(output_dir: &Path, name: &str) -> Result<fs::File, failure::Error> {
+    fn create_writer(output_dir: &Path, name: &str) -> Result<fs::File> {
         let mut output_path = output_dir.to_path_buf();
         output_path.push(Path::new(name));
         output_path.set_extension("fastq");
@@ -94,10 +93,7 @@ impl Config {
     }
 }
 
-pub fn split_file<P: AsRef<Path>>(
-    config: &mut Config,
-    input_name: P,
-) -> Result<(usize, usize), failure::Error> {
+pub fn split_file<P: AsRef<Path>>(config: &mut Config, input_name: P) -> Result<(usize, usize)> {
     let mut total = 0;
     let mut tooshort = 0;
 
@@ -117,10 +113,10 @@ pub fn split_file<P: AsRef<Path>>(
             tooshort += 1;
         } else {
             let split = config.linker_spec.split_record(&fq).ok_or_else(|| {
-                failure::err_msg(format!(
+                anyhow!(
                     "Split failed on \"{}\"",
                     str::from_utf8(fq.seq()).unwrap_or("???")
-                ))
+                )
             })?;
             let mut sample = config.sample_map.get_mut(split.sample_index())?;
             sample.handle_split_read(&fq, &split)?;
@@ -138,7 +134,7 @@ pub fn split_file<P: AsRef<Path>>(
     Ok((total, tooshort))
 }
 
-pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<(), failure::Error> {
+pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<()> {
     let mut fates_path = config.output_dir.clone();
     fates_path.push("fates.txt");
     let mut fates = fs::File::create(&fates_path)?;
@@ -170,7 +166,7 @@ pub fn write_stats(config: &Config, total: usize, tooshort: usize) -> Result<(),
     Ok(())
 }
 
-pub fn fastx_split(mut config: Config) -> Result<(), failure::Error> {
+pub fn fastx_split(mut config: Config) -> Result<()> {
     let mut total = 0;
     let mut tooshort = 0;
 

@@ -3,8 +3,7 @@ use std::fmt;
 use std::io;
 use std::str;
 
-use failure;
-
+use anyhow::Result;
 use bio::io::fastq;
 
 use crate::fastx_split::linkers::*;
@@ -58,11 +57,7 @@ impl Sample {
     ///
     /// An error variant is returned when problems arise in writing
     /// the processed fastq record to the output file.
-    pub fn handle_split_read(
-        &mut self,
-        fq: &fastq::Record,
-        split: &LinkerSplit,
-    ) -> Result<(), failure::Error> {
+    pub fn handle_split_read(&mut self, fq: &fastq::Record, split: &LinkerSplit) -> Result<()> {
         let umi_id = format!("{}#{}", fq.id(), str::from_utf8(split.umi())?);
         let splitfq = fastq::Record::with_attrs(
             umi_id.as_str(),

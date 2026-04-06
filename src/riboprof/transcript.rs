@@ -7,8 +7,6 @@ use std::io;
 use std::num::ParseIntError;
 use std::ops::{Deref, Range};
 
-use failure;
-
 use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
 use bio::io::common::Records;
@@ -611,7 +609,7 @@ pub enum TrxError {
     Bed(String),
     BedCsv(csv::Error),
     BedParse(String, ParseIntError),
-    BedRead(failure::Error),
+    BedRead(anyhow::Error),
     BedSplicing(String, SplicingError),
     Cds(String),
     TrxExists(String),

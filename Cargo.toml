@@ -9,10 +9,10 @@ bio = "*"
 rust-htslib = "*"
 itertools = "*"
 csv = "*"
-failure = "*"
 clap = "*"
 regex = "1"
 bio-types = ">=0.3"
+anyhow = "*"
 
 [profile.dev]
 opt-level = 3

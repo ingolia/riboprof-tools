@@ -1,12 +1,8 @@
-extern crate clap;
-extern crate failure;
-
-extern crate riboprof;
-
 use std::io;
 use std::io::Write;
 use std::process;
 
+use anyhow::Result;
 use clap::{Arg, ArgAction, Command, value_parser};
 
 use riboprof::fastx_split::*;
@@ -21,13 +17,13 @@ fn main() {
     };
 }
 
-fn wrapper() -> Result<(), failure::Error> {
+fn wrapper() -> Result<()> {
     let cli = get_cli()?;
     let config = Config::new(&cli)?;
     fastx_split(config)
 }
 
-fn get_cli() -> Result<CLI, failure::Error> {
+fn get_cli() -> Result<CLI> {
     let matches = Command::new("fastx-split")
         .version("0.1.0")
         .author("Nick Ingolia <ingolia@berkeley.edu>")

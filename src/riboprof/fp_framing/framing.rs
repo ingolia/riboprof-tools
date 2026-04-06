@@ -1,16 +1,13 @@
 use std::ops::Range;
 use std::rc::Rc;
 
-use failure;
-
+use anyhow::Result;
 use bio_types::annot::loc::Loc;
-//use bio_types::annot::pos::Pos;
 use bio_types::annot::spliced::Spliced;
 use bio_types::strand::*;
 use rust_htslib::bam;
 
 use crate::bam_utils::*;
-//use codon_assign::*;
 use crate::transcript::*;
 
 pub fn record_framing(
@@ -20,7 +17,7 @@ pub fn record_framing(
     lengths: &Range<usize>,
     cdsbody: &(isize, isize),
     count_multi: bool,
-) -> Result<BamFrameResult, failure::Error> {
+) -> Result<BamFrameResult> {
     if !(is_single_hit(rec) || (count_multi && is_first_hit(rec))) {
         return Ok(BamFrameResult::MultiHit);
     }

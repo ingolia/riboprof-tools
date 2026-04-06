@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str;
 
+use anyhow::{Result, bail};
 use bio::io::bed;
 use bio_types::annot::refids::RefIDSet;
-use failure;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
@@ -46,7 +46,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
+    pub fn new(cli: &CLI) -> Result<Self> {
         let trxome = Self::read_transcriptome(&cli)?;
 
         let cdsbody_range = Self::parse_pair(&cli.cdsbody)?;
@@ -77,13 +77,12 @@ impl Config {
         filepath
     }
 
-    fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>, failure::Error> {
+    fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>> {
         // ZZZ Handle Trx->Gene mappings
         let mut refids = RefIDSet::new();
         let mut trxome = Transcriptome::new();
 
-        let mut bed_reader =
-            bed::Reader::from_file(&cli.bed).map_err(|e| format_err!("{:?}", e))?;
+        let mut bed_reader = bed::Reader::from_file(&cli.bed)?;
 
         for recres in bed_reader.records() {
             let rec = recres?;
@@ -94,7 +93,7 @@ impl Config {
         Ok(trxome)
     }
 
-    fn parse_pair<I>(pair_str: &str) -> Result<Range<I>, failure::Error>
+    fn parse_pair<I>(pair_str: &str) -> Result<Range<I>>
     where
         I: str::FromStr,
         I::Err: Error + Send + Sized + Sync + 'static,
@@ -106,15 +105,12 @@ impl Config {
                 end: strs[1].parse()?,
             })
         } else {
-            Err(failure::err_msg(format!(
-                "Expecting integer pair \"a,b\" but got \"{}\"",
-                pair_str
-            )))
+            bail!("Expecting integer pair \"a,b\" but got \"{}\"", pair_str)
         }
     }
 }
 
-pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
+pub fn run_fp_framing(config: Config) -> Result<()> {
     let mut input = if config.input == "-" {
         bam::Reader::from_stdin()?
     } else {

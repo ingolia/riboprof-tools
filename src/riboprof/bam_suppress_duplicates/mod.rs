@@ -2,8 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use failure;
-
+use anyhow::Result;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
@@ -35,7 +34,7 @@ pub struct Config {
 const DEFAULT_NLIM: usize = 100; // ZZZ
 
 impl Config {
-    pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
+    pub fn new(cli: &CLI) -> Result<Self> {
         let input = if cli.bam_input == "-" {
             bam::Reader::from_stdin()?
         } else {
@@ -95,7 +94,7 @@ pub fn same_cigar(r0: &bam::Record, r1: &bam::Record) -> bool {
     r0.raw_cigar() == r1.raw_cigar()
 }
 
-pub fn bam_suppress_duplicates(mut config: Config) -> Result<(), failure::Error> {
+pub fn bam_suppress_duplicates(mut config: Config) -> Result<()> {
     let loc_groups = RecordGroups::new(&mut config.input)?;
 
     for loc_group_res in loc_groups {

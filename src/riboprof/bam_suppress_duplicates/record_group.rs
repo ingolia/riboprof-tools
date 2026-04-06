@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 
-use failure;
-
+use anyhow::{Result, bail};
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
 
@@ -28,7 +27,7 @@ impl<'a> RecordGroups<'a> {
     ///
     /// An error variant is returned when an error arises reading the
     /// first record from the nested `bam_reader` iterator.
-    pub fn new(bam_reader: &'a mut bam::Reader) -> Result<Self, failure::Error> {
+    pub fn new(bam_reader: &'a mut bam::Reader) -> Result<Self> {
         let mut rg = RecordGroups {
             bam_reader: bam_reader,
             next_record: None,
@@ -37,7 +36,7 @@ impl<'a> RecordGroups<'a> {
         Ok(rg)
     }
 
-    fn read_next_record(&mut self) -> Result<Option<bam::Record>, failure::Error> {
+    fn read_next_record(&mut self) -> Result<Option<bam::Record>> {
         let mut rec = bam::Record::new();
         match self.bam_reader.read(&mut rec) {
             Some(Ok(())) => Ok(Some(rec)),
@@ -46,7 +45,7 @@ impl<'a> RecordGroups<'a> {
         }
     }
 
-    fn read_group(&mut self, curr: bam::Record) -> Result<Vec<bam::Record>, failure::Error> {
+    fn read_group(&mut self, curr: bam::Record) -> Result<Vec<bam::Record>> {
         let curr_ref = curr.clone();
         let mut group = Vec::new();
         group.push(curr);
@@ -61,11 +60,7 @@ impl<'a> RecordGroups<'a> {
                     }
                     Ordering::Equal => group.push(rec),
                     Ordering::Greater => {
-                        return Err(format_err!(
-                            "Records out of order: {:?} > {:?}",
-                            curr_ref,
-                            rec
-                        ));
+                        bail!("Records out of order: {:?} > {:?}", curr_ref, rec);
                     }
                 }
             } else {
@@ -93,7 +88,7 @@ pub fn cmp_location(r1: &bam::Record, r2: &bam::Record) -> Ordering {
 }
 
 impl<'a> Iterator for RecordGroups<'a> {
-    type Item = Result<Vec<bam::Record>, failure::Error>;
+    type Item = Result<Vec<bam::Record>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(curr) = self.next_record.take() {

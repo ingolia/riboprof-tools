@@ -1,14 +1,10 @@
-extern crate clap;
-extern crate failure;
-
-extern crate riboprof;
-
 use std::io;
 use std::io::Write;
 use std::process;
 
 use clap::{Arg, ArgAction, Command};
 
+use anyhow::Result;
 use riboprof::fp_framing::*;
 
 fn main() {
@@ -21,13 +17,13 @@ fn main() {
     };
 }
 
-fn wrapper() -> Result<(), failure::Error> {
+fn wrapper() -> Result<()> {
     let cli = get_cli()?;
     let config = Config::new(&cli)?;
     run_fp_framing(config)
 }
 
-fn get_cli() -> Result<CLI, failure::Error> {
+fn get_cli() -> Result<CLI> {
     let matches = Command::new("fp-framing")
         .version("0.1.0")
         .author("Nick Ingolia <ingolia@berkeley.edu>")
