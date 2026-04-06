@@ -1,4 +1,3 @@
-extern crate itertools;
 extern crate regex;
 
 extern crate bio;

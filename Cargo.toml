@@ -1,18 +1,17 @@
 [package]
 name = "riboprof-tools"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Nicholas Ingolia <ingolia@berkeley.edu>"]
 edition = "2024"
 
 [dependencies]
-bio = "*"
-rust-htslib = "*"
-itertools = "*"
-csv = "*"
-clap = "*"
-regex = "1"
-bio-types = ">=0.3"
-anyhow = "*"
+bio = ">=3.0, <4"
+rust-htslib = ">=1.0, <2"
+csv = ">=1.0, <2"
+clap = ">= 4, < 5"
+regex = ">=1.0, <2"
+bio-types = ">=1"
+anyhow = ">=1.0, <2"
 
 [profile.dev]
 opt-level = 3
