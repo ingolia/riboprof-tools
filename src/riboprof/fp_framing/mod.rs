@@ -7,13 +7,14 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use bio::io::bed;
 use bio_types::annot::refids::RefIDSet;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
 use crate::bam_utils::*;
+use crate::parse_pair;
 use crate::transcript::*;
 
 mod framing;
@@ -49,15 +50,15 @@ impl Config {
     pub fn new(cli: &CLI) -> Result<Self> {
         let trxome = Self::read_transcriptome(&cli)?;
 
-        let cdsbody_range = Self::parse_pair(&cli.cdsbody)?;
+        let cdsbody_range = parse_pair(&cli.cdsbody)?;
 
         Ok(Config {
             input: cli.input.to_string(),
             output: Path::new(&cli.output).to_path_buf(),
             trxome: trxome,
-            flanking: Self::parse_pair(&cli.flanking)?,
+            flanking: parse_pair(&cli.flanking)?,
             cdsbody: (cdsbody_range.start, cdsbody_range.end),
-            lengths: Self::parse_pair(&cli.lengths)?,
+            lengths: parse_pair(&cli.lengths)?,
             count_multi: cli.count_multi,
             annotate: cli
                 .annotate
@@ -91,22 +92,6 @@ impl Config {
         }
 
         Ok(trxome)
-    }
-
-    fn parse_pair<I>(pair_str: &str) -> Result<Range<I>>
-    where
-        I: str::FromStr,
-        I::Err: Error + Send + Sized + Sync + 'static,
-    {
-        let strs: Vec<&str> = pair_str.split(",").collect();
-        if strs.len() == 2 {
-            Ok(Range {
-                start: strs[0].parse()?,
-                end: strs[1].parse()?,
-            })
-        } else {
-            bail!("Expecting integer pair \"a,b\" but got \"{}\"", pair_str)
-        }
     }
 }
 

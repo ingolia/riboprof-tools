@@ -109,6 +109,16 @@ where
     pub fn trxname(&self) -> &str {
         self.trxname.deref()
     }
+
+    /// Returns a "fetch description" to retrieve reads from an indexed BAM file
+    /// based on the transcript locatioin.
+    pub fn fetch_desc(&self) -> (&str, i64, i64) {
+        (
+            self.loc.refid().deref(),
+            self.loc.start() as i64,
+            self.loc.start() as i64 + self.loc.length() as i64,
+        )
+    }
 }
 
 impl<R> Transcript<R>
@@ -558,6 +568,10 @@ impl<R: Eq + Hash> Transcriptome<R> {
                 .get(ent.data())
                 .expect("transcript missing from map")
         })
+    }
+
+    pub fn transcripts(&self) -> impl Iterator<Item = &Transcript<R>> {
+        self.trxname_to_transcript.values()
     }
 }
 

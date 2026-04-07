@@ -65,7 +65,7 @@ impl ASites {
             .get(len)
             .unwrap_or(&None)
             .as_ref()
-            .map(|o| *o)
+            .copied()
     }
 
     /// Returns the A site position from a footprint location.
