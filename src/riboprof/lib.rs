@@ -12,6 +12,7 @@ pub mod fp_count;
 pub mod fp_framing;
 pub mod metagene;
 pub mod transcript;
+pub mod wiggle_track;
 
 fn parse_pair<I>(pair_str: &str) -> Result<Range<I>>
 where

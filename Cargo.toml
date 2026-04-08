@@ -35,3 +35,7 @@ path = "src/bam_suppress_duplicates.rs"
 [[bin]]
 name = "fp-count"
 path = "src/fp_count_main.rs"
+
+[[bin]]
+name = "wiggle-track"
+path = "src/wiggle_track_main.rs"

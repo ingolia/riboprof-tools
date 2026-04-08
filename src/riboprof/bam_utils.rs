@@ -32,6 +32,31 @@ impl<R> Tids<R> {
     }
 }
 
+/// TODO Unify code paths
+pub fn bam_to_spliced_tid(record: &bam::Record) -> Result<Option<Spliced<u32, ReqStrand>>> {
+    if record.tid() < 0 {
+        return Ok(None);
+    }
+
+    let (lengths, starts) = cigar_to_lengths_starts(&record.cigar());
+
+    let strand = if record.is_reverse() {
+        ReqStrand::Reverse
+    } else {
+        ReqStrand::Forward
+    };
+
+    let spliced = Spliced::with_lengths_starts(
+        record.tid() as u32,
+        record.pos() as isize,
+        lengths.as_slice(),
+        starts.as_slice(),
+        strand,
+    )?;
+
+    Ok(Some(spliced))
+}
+
 pub fn bam_to_spliced<R>(
     tids: &Tids<R>,
     record: &bam::Record,

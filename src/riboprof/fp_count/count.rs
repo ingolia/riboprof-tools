@@ -13,6 +13,7 @@ use crate::transcript::{Transcript, splice_compatible};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Compat {
+    IncompatStrand,
     IncompatSplice,
     IncompatASite,
     IncompatNoCDS,
@@ -30,6 +31,15 @@ pub struct CountConfig {
 }
 
 impl CountConfig {
+    /// Creates a read counting configuration
+    ///
+    /// # Arguments
+    /// * `asites` is the length-based A-site assignment table
+    /// * `cds_insets` are the codons excluded from the start and end of the CDS
+    /// * `nhits` controls whether multimapping reads are scaled based on NH
+    /// * `whole` controls whether reads are mapped to the whole transcript,
+    ///   versus just the CDS
+    /// * `reverse` indicates that footprints align to the reverse strand
     pub fn new(
         asites: ASites,
         cds_insets: Range<isize>,
@@ -100,6 +110,8 @@ impl CountConfig {
 
     /// Compatibility of a footprint with the transcript
     ///
+    /// * If the footprint location is on the opposite strand from the transcript,
+    ///   then `Compat::IncompatStrand` is returned
     /// * If the splicing structure of the footprint location is not compatible
     ///   with the transcript, then `Compat::IncompatSplice` is returned.
     /// * If the A site cannot be determined from the footprint length,
@@ -128,7 +140,11 @@ impl CountConfig {
                 Compat::IncompatASite
             }
         } else {
-            Compat::IncompatSplice
+            if trx.loc().strand() != fp_str.strand() {
+                Compat::IncompatStrand
+            } else {
+                Compat::IncompatSplice
+            }
         }
     }
 
@@ -216,9 +232,3 @@ impl std::default::Default for Count {
         }
     }
 }
-
-// countBam :: (Show a, Enum a) => Conf -> EnumXountIO a -> (Bam.Bam1 -> a) -> Bam.Bam1 -> IO ()
-// countBam conf count f bam
-//   = let x | confNHits conf = maybe 0.0 (recip . fromIntegral) $! Bam.nHits bam
-//           | otherwise = 1.0
-//     in xountEnum count (f bam) x

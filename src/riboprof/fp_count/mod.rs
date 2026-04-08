@@ -17,11 +17,6 @@ use crate::transcript::Transcriptome;
 mod count;
 
 use crate::fp_count::count::{Count, CountConfig};
-// mod framing;
-// mod stats;
-
-// use crate::fp_framing::framing::*;
-// use crate::fp_framing::stats::*;
 
 pub struct CLI {
     pub input: String,
