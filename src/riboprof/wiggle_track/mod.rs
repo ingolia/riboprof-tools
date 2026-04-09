@@ -6,10 +6,12 @@ use anyhow::{Result, anyhow};
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
+pub mod genome_count;
 pub mod wiggle;
-pub mod window_count;
 
 use crate::codon_assign::ASites;
+use crate::wiggle_track::genome_count::{GenomeCounts, tally};
+use crate::wiggle_track::wiggle::{fp_asite, write_wigs};
 
 pub struct CLI {
     pub input: String,
@@ -77,13 +79,27 @@ impl Config {
 }
 
 pub fn run_wiggle_track_cli(cli: &CLI) -> Result<()> {
-    run_wiggle_track(&Config::new(cli)?)
+    run_wiggle_track(&mut Config::new(cli)?)
 }
 
-pub fn run_wiggle_track(config: &Config) -> Result<()> {
+pub fn run_wiggle_track(config: &mut Config) -> Result<()> {
     if let Some(chrsizes) = &config.chrsizes {
         write_chr_sizes(chrsizes, config.input.header())?;
     }
+
+    let mut gcount = GenomeCounts::new(config.input.header())?;
+
+    for recres in config.input.records() {
+        if let Some(asite) = fp_asite(&config.asites, &recres?)? {
+            gcount.update(asite, tally)?;
+        }
+    }
+
+    write_wigs(
+        &gcount,
+        (&mut config.output_fwd, &mut config.output_rev),
+        config.qnorm,
+    )?;
 
     Ok(())
 }

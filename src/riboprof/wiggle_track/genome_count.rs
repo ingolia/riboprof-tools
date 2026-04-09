@@ -100,7 +100,7 @@ impl<N> WindowCounts<N> {
         1 << Self::WINDOW_BITS
     }
 
-    fn sparse_pos_iter(&self) -> impl Iterator<Item = (usize, &N)> {
+    pub fn sparse_pos_iter(&self) -> impl Iterator<Item = (usize, &N)> {
         self.counts
             .iter()
             .enumerate()
@@ -143,8 +143,6 @@ impl<N: Default> WindowCounts<N> {
     }
 }
 
-impl WindowCounts<usize> {
-    pub fn tally(&mut self, pos: usize) -> Result<()> {
-        self.update(pos, |ctptr| *ctptr += 1)
-    }
+pub fn tally(ctptr: &mut usize) -> () {
+    *ctptr += 1;
 }
