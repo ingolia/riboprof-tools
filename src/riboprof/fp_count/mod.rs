@@ -89,6 +89,9 @@ pub fn run_fp_count_from_cli(cli: &CLI) -> Result<()> {
 pub fn run_fp_count(mut config: Config) -> Result<()> {
     let tids = Tids::new(&mut config.refids, &config.input.header());
 
+    let mut total_compat = 0.0;
+    let mut total_strand = 0.0;
+
     for trx in config.trxome.transcripts() {
         let mut trx_count = Count::new();
         config.input.fetch(trx.fetch_desc())?;
@@ -98,6 +101,9 @@ pub fn run_fp_count(mut config: Config) -> Result<()> {
             trx_count.tally_record(&config.count_config, &trx, &tids, &rec)?;
         }
 
+        total_compat += trx_count.compat();
+        total_strand += trx_count.strand();
+
         write!(
             config.output,
             "{}\t{}\t{:0.1}\n",
@@ -105,6 +111,12 @@ pub fn run_fp_count(mut config: Config) -> Result<()> {
             trx.loc().exon_total_length(),
             trx_count.compat()
         )?;
+    }
+
+    if total_strand > total_compat {
+        println!("WARNING: {:.1} wrong-strand reads > {:.1} correct-strand reads",
+            total_strand, total_compat);
+        println!("         Alignment strand may be wrong");
     }
 
     Ok(())

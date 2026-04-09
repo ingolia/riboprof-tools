@@ -1,11 +1,18 @@
 #!/bin/bash
 
-INBAM=NINM011_AGCTA_1M
+set -x
+set -e
+
 GENOME=../data/sac_cer_yassour.bed
 ASITES=../data/NINM011_asites.txt
 
-RUST_BACKTRACE=1 ~/Prog/riboprof-tools/target/debug/fp-count \
-            -b ${GENOME} \
-            ~/Prog/riboprof-tools/test/${INBAM}_sorted.bam \
-            -a ${ASITES} \
-            -o ${INBAM}_rs_count.txt
+for BAM in `ls *_sort.bam`
+do
+    BASE=`basename ${BAM} .bam`
+
+    RUST_BACKTRACE=1 ~/Prog/riboprof-tools/target/debug/fp-count \
+		     -b ${GENOME} \
+		     ~/Prog/riboprof-tools/test/${BASE}.bam \
+		     -a ${ASITES} \
+		     -o ${BASE}_rs_count.txt
+done

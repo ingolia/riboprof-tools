@@ -4,14 +4,14 @@ set -x
 set -e
 
 GENOME=../data/sac_cer_yassour.bed
+ASITES=../data/NINM011_asites.txt
 
 for BAM in `ls *_sort.bam`
 do
     BASE=`basename ${BAM} .bam`
-    RUST_BACKTRACE=1 ~/Prog/riboprof-tools/target/debug/fp-framing \
-		     -l 17,41 \
-		     -b ${GENOME} \
+
+    RUST_BACKTRACE=1 ~/Prog/riboprof-tools/target/debug/wiggle-track \
 		     ~/Prog/riboprof-tools/test/${BASE}.bam \
-		     -a ${BASE}_rsannot.bam \
-		     -o ${BASE}_rs
+		     -a ${ASITES} \
+		     -o ${BASE}_rs_wiggle.wig
 done

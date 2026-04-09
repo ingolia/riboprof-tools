@@ -187,6 +187,7 @@ impl CountConfig {
 
 pub struct Count {
     compat: f64,
+    strand: f64,
     incompat: f64,
 }
 
@@ -197,6 +198,10 @@ impl Count {
 
     pub fn compat(&self) -> f64 {
         self.compat
+    }
+
+    pub fn strand(&self) -> f64 {
+        self.strand
     }
 
     #[allow(dead_code)]
@@ -216,6 +221,8 @@ impl Count {
 
         if compat == Compat::Compat {
             self.compat += weight;
+        } else if compat == Compat::IncompatStrand {
+            self.strand += weight;
         } else {
             self.incompat += weight;
         }
@@ -228,6 +235,7 @@ impl std::default::Default for Count {
     fn default() -> Self {
         Count {
             compat: 0.0,
+            strand: 0.0,
             incompat: 0.0,
         }
     }
