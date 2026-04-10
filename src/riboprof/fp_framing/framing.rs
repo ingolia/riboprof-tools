@@ -4,11 +4,11 @@ use std::rc::Rc;
 use anyhow::Result;
 use bio_types::annot::loc::Loc;
 use bio_types::annot::spliced::Spliced;
-use bio_types::strand::*;
+use bio_types::strand::ReqStrand;
 use rust_htslib::bam;
 
-use crate::bam_utils::*;
-use crate::transcript::*;
+use crate::bam_utils::{Tids, bam_to_spliced};
+use crate::transcript::{Transcript, Transcriptome, TrxPos, splice_compatible};
 
 pub fn record_framing(
     trxome: &Transcriptome<Rc<String>>,
@@ -287,7 +287,7 @@ pub fn fp_into_transcript<'a>(
             .expect("pos_into(first_pos) failed after splice_compatible() = true");
         assert!(pos.strand() == ReqStrand::Forward);
         assert!(pos.pos() >= 0);
-        Some(TrxPos::new(trx, pos.pos() as usize))
+        Some(TrxPos::new(trx, pos.pos() as usize).expect("fp_into_transcript has bad position"))
     } else {
         None
     }
@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn test_body_frame() {
+    fn test_body_frame() -> Result<()> {
         // CDS is [83..1337)
         let fwd_str = "chr01	33364	34785	YAL061W	0	+	33447	34701	0	1	1421,	0,\n";
         let fwd_trx = transcript_from_str(&fwd_str);
@@ -436,39 +436,79 @@ mod tests {
         let rev_str = "chr01	51775	52696	YAL049C	0	-	51854	52595	0	1	921,	0,\n";
         let rev_trx = transcript_from_str(&rev_str);
 
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 63)), None);
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 83)), None);
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 97)), None);
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 98)), Some(0));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 99)), Some(1));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 100)), Some(2));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
-        assert_eq!(body_frame(&(16, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
-        assert_eq!(body_frame(&(17, -15), &TrxPos::new(&fwd_trx, 101)), Some(0));
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 200)), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 63)?), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 83)?), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 97)?), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 98)?), Some(0));
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 99)?), Some(1));
         assert_eq!(
-            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1321)),
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 100)?),
             Some(2)
         );
         assert_eq!(
-            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1322)),
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 101)?),
             Some(0)
         );
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1323)), None);
-        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1353)), None);
+        assert_eq!(
+            body_frame(&(16, -15), &TrxPos::new(&fwd_trx, 101)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(17, -15), &TrxPos::new(&fwd_trx, 101)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 200)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1321)?),
+            Some(2)
+        );
+        assert_eq!(
+            body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1322)?),
+            Some(0)
+        );
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1323)?), None);
+        assert_eq!(body_frame(&(15, -15), &TrxPos::new(&fwd_trx, 1353)?), None);
 
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 50)), None);
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 101)), None);
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 112)), None);
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 113)), Some(0));
-        assert_eq!(body_frame(&(11, -18), &TrxPos::new(&rev_trx, 113)), Some(0));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 114)), Some(1));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 115)), Some(2));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 116)), Some(0));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 215)), Some(0));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 823)), Some(2));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 824)), Some(0));
-        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 825)), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 50)?), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 101)?), None);
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 112)?), None);
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 113)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(11, -18), &TrxPos::new(&rev_trx, 113)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 114)?),
+            Some(1)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 115)?),
+            Some(2)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 116)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 215)?),
+            Some(0)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 823)?),
+            Some(2)
+        );
+        assert_eq!(
+            body_frame(&(12, -18), &TrxPos::new(&rev_trx, 824)?),
+            Some(0)
+        );
+        assert_eq!(body_frame(&(12, -18), &TrxPos::new(&rev_trx, 825)?), None);
+        Ok(())
     }
 
     #[test]

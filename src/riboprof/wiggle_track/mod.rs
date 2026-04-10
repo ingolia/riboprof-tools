@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
@@ -56,9 +56,10 @@ pub struct Config {
 impl Config {
     pub fn new(cli: &CLI) -> Result<Self> {
         let input = if cli.input == "-" {
-            bam::Reader::from_stdin()?
+            bam::Reader::from_stdin().context("reading BAM alignments from standard input")?
         } else {
-            bam::Reader::from_path(Path::new(&cli.input))?
+            bam::Reader::from_path(Path::new(&cli.input))
+                .with_context(|| format!("reading BAM alignments from {}", &cli.input))?
         };
 
         let (output_fwd_name, output_rev_name) = cli.output_names()?;

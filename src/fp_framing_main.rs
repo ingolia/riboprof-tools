@@ -5,12 +5,12 @@ use std::process;
 use clap::{Arg, ArgAction, Command};
 
 use anyhow::Result;
-use riboprof::fp_framing::*;
+use riboprof::fp_framing::{CLI, run_fp_framing_cli};
 
 fn main() {
     match wrapper() {
         Err(e) => {
-            io::stderr().write(format!("{}\n", e).as_bytes()).unwrap();
+            io::stderr().write(format!("{:#}\n", e).as_bytes()).unwrap();
             process::exit(1);
         }
         _ => (),
@@ -18,9 +18,7 @@ fn main() {
 }
 
 fn wrapper() -> Result<()> {
-    let cli = get_cli()?;
-    let config = Config::new(&cli)?;
-    run_fp_framing(config)
+    run_fp_framing_cli(get_cli()?)
 }
 
 fn get_cli() -> Result<CLI> {

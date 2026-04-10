@@ -1,3 +1,10 @@
+// Copyright 2018-2026 Nicholas Ingolia
+// Licensed under the MIT license (http://opensource.org/licenses/MIT)
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Framework and tools for ribosome profiling data analysis
+
 use std::error::Error;
 use std::ops::Range;
 use std::str;
