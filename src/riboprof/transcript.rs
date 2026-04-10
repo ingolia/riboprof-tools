@@ -1,12 +1,22 @@
+// Copyright 2018-2026 Nicholas Ingolia
+// Licensed under the MIT license (http://opensource.org/licenses/MIT)
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Annotations of spliced transcripts that contain a coding sequence
+//!
+//! This module provides data structures for named transcripts and
+//! collections of transcripts.
+
 use std::cmp::{max, min};
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
 use std::io;
 use std::num::ParseIntError;
 use std::ops::{Deref, Range};
 
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
 use bio::io::common::Records;
@@ -16,7 +26,7 @@ use bio_types::annot::refids::RefIDSet;
 use bio_types::annot::spliced::*;
 use bio_types::strand::*;
 
-/// Annotation of a transcript as a `Spliced` `annot` location.
+/// Annotation of a transcript as a [`Spliced`] genomic location.
 ///
 /// The transcript is associated with a gene (one gene may have
 /// multiple transcripts) and has an optional coding sequence.
@@ -32,7 +42,7 @@ pub struct Transcript<R> {
 }
 
 impl<R> Transcript<R> {
-    /// Returns the spliced location of the transcript.
+    /// Returns the genomic location of the transcript.
     pub fn loc(&self) -> &Spliced<R, ReqStrand> {
         &self.loc
     }
@@ -43,10 +53,12 @@ impl<R> Transcript<R> {
         &self.cds
     }
 
+    /// Does the transcript contain a coding sequence?
     pub fn is_coding(&self) -> bool {
         self.cds.is_some()
     }
 
+    /// Does the transcript lack a coding sequence?
     pub fn is_noncoding(&self) -> bool {
         self.cds.is_none()
     }
@@ -63,6 +75,12 @@ impl<R> Transcript<R> {
 }
 
 impl<R: Eq> Transcript<R> {
+    /// Gathers transcripts into groups that share the same gene name
+    ///
+    /// Returns an association list of transcript groups in the form,
+    /// ```
+    /// [(gene1_name, [gene1_trx1, gene1_trx2, ...]), ...]
+    /// ```
     pub fn group_by_gene<'a, I>(trx_iter: I) -> Vec<(&'a R, Vec<&'a Transcript<R>>)>
     where
         I: Iterator<Item = &'a Transcript<R>>,
@@ -86,6 +104,11 @@ impl<R: Eq> Transcript<R> {
         groups
     }
 
+    /// Find an item by name in an association list
+    ///
+    /// For an association list `gs = [(key1, value1), ...]`, returns a mutable reference
+    /// to the `value` for the first entry where `key == g`, or `None` if no entry
+    /// matches `g`.
     fn find_mut<'a, 'b, S: PartialEq, T>(gs: &'b mut [(&'a S, T)], g: &'a S) -> Option<&'b mut T> {
         for (x, xs) in gs.iter_mut() {
             if *x == g {
@@ -110,8 +133,11 @@ where
         self.trxname.deref()
     }
 
-    /// Returns a "fetch description" to retrieve reads from an indexed BAM file
-    /// based on the transcript locatioin.
+    /// Returns a triplet of `(reference, start, end)` that encompasses the
+    /// genomic location of the transcript.
+    ///
+    /// This triplet can be used with [`rust_htslib::bam::IndexedReader::fetch()`]
+    /// to retrieve all reads overlapping a transcript from an indexed BAM file.
     pub fn fetch_desc(&self) -> (&str, i64, i64) {
         (
             self.loc.refid().deref(),
@@ -164,14 +190,15 @@ where
         trxname: R,
         loc: Spliced<R, ReqStrand>,
         cds: Option<Range<usize>>,
-    ) -> Result<Self, TrxError> {
+    ) -> Result<Self> {
         if cds.as_ref().map_or(false, |rng| rng.end <= rng.start) {
-            Err(TrxError::Cds(format!("Invalid CDS range {:?}", cds)))
+            bail!("Invalid CDS range {:?}", cds);
         } else if cds.as_ref().map_or(false, |rng| rng.end > loc.length()) {
-            Err(TrxError::Cds(format!(
+            bail!(
                 "CDS range {:?} extends beyond end of transcript {:?}",
-                cds, loc
-            )))
+                cds,
+                loc
+            );
         } else {
             Ok(Transcript {
                 gene: gene,
@@ -187,7 +214,7 @@ impl<R> Transcript<R>
 where
     R: Deref<Target = String> + From<String> + Eq + Clone,
 {
-    /// Construct a transcirpt from a 12-column BED annotation.
+    /// Construct a transcript from a 12-column BED annotation.
     ///
     /// The gene and transcript name are both taken from the BED name
     /// entry, which is required. The overall transcript annotation is
@@ -228,15 +255,14 @@ where
     /// (chromosome) name.
     ///
     /// # Errors
-    ///
-    /// An error variant is returned when required information is
-    /// missing, unparseable, or inconsistent.
-    pub fn from_bed12(record: &bed::Record, refids: &mut RefIDSet<R>) -> Result<Self, TrxError> {
-        let loc = Self::loc_from_bed(record, refids)?;
-        let cds = Self::cds_from_bed(record, &loc)?;
+    /// The BED information is missing, malformed, or inconsistent.
+    pub fn from_bed12(record: &bed::Record, refids: &mut RefIDSet<R>) -> Result<Self> {
+        let loc =
+            Self::loc_from_bed(record, refids).context("transcript location from BED record")?;
+        let cds = Self::cds_from_bed(record, &loc).context("CDS location from BED record")?;
         let name = record
             .name()
-            .ok_or_else(|| TrxError::bed(record, "No name"))?;
+            .ok_or_else(|| anyhow!("BED record with no name"))?;
 
         Ok(Transcript {
             gene: refids.intern(name),
@@ -256,49 +282,46 @@ where
     fn loc_from_bed(
         record: &bed::Record,
         refids: &mut RefIDSet<R>,
-    ) -> Result<Spliced<R, ReqStrand>, TrxError> {
+    ) -> Result<Spliced<R, ReqStrand>> {
         let block_count = record
             .aux(Self::BLOCK_COUNT_COL)
-            .ok_or_else(|| TrxError::bed(record, "No splicing blocks"))?
+            .ok_or_else(|| anyhow!("No splicing blocks"))?
             .parse::<usize>()
-            .map_err(|err| TrxError::bed_parse(record, "Bad block count", err))?;
+            .context("Parsing splicing block count")?;
 
         let block_sizes = record
             .aux(Self::BLOCK_SIZES_COL)
-            .ok_or_else(|| TrxError::bed(record, "No splicing block sizes"))?
+            .ok_or_else(|| anyhow!("No splicing block sizes"))?
             .split_terminator(",")
             .map(|size_str| size_str.parse::<usize>())
             .collect::<Result<Vec<usize>, ParseIntError>>()
-            .map_err(|err| TrxError::bed_parse(record, "Bad block sizes", err))?;
+            .context("Parsing splicing block lengths")?;
 
         let block_starts = record
             .aux(Self::BLOCK_STARTS_COL)
-            .ok_or_else(|| TrxError::bed(record, "No splicing block starts"))?
+            .ok_or_else(|| anyhow!("No splicing block starts"))?
             .split_terminator(",")
             .map(|size_str| size_str.parse::<usize>())
             .collect::<Result<Vec<usize>, ParseIntError>>()
-            .map_err(|err| TrxError::bed_parse(record, "Bad block starts", err))?;
+            .context("Parsing splicing block starts")?;
 
         if block_sizes.len() != block_count || block_starts.len() != block_count {
-            return Err(TrxError::bed(
-                record,
-                &format!(
-                    "block count = {}, |sizes| = {}, |starts| = {}",
-                    block_count,
-                    block_sizes.len(),
-                    block_starts.len()
-                ),
-            ));
+            bail!(
+                "block count = {}, |sizes| = {}, |starts| = {}",
+                block_count,
+                block_sizes.len(),
+                block_starts.len()
+            );
         }
 
         let strand = match record
             .aux(Self::STRAND_COL)
-            .ok_or_else(|| TrxError::bed(record, "No strand"))?
+            .ok_or_else(|| anyhow!("No strand"))?
         {
-            "+" => Ok(ReqStrand::Forward),
-            "-" => Ok(ReqStrand::Reverse),
-            _ => Err(TrxError::bed(record, "Bad strand")),
-        }?;
+            "+" => ReqStrand::Forward,
+            "-" => ReqStrand::Reverse,
+            _ => bail!("Bad strand"),
+        };
 
         Spliced::with_lengths_starts(
             refids.intern(record.chrom()),
@@ -307,24 +330,24 @@ where
             &block_starts,
             strand,
         )
-        .map_err(|err| TrxError::BedSplicing(format!("Splicing error on record {:?}", record), err))
+        .context("Splicing error")
     }
 
     fn cds_from_bed(
         record: &bed::Record,
         loc: &Spliced<R, ReqStrand>,
-    ) -> Result<Option<Range<usize>>, TrxError> {
+    ) -> Result<Option<Range<usize>>> {
         if let Some(thick_start) = record
             .aux(Self::THICK_START_COL)
             .map(|start_str| start_str.parse::<usize>())
             .transpose()
-            .map_err(|err| TrxError::bed_parse(record, "thickStart", err))?
+            .context("Parsing thickStart")?
         {
             if let Some(thick_end) = record
                 .aux(Self::THICK_END_COL)
                 .map(|end_str| end_str.parse::<usize>())
                 .transpose()
-                .map_err(|err| TrxError::bed_parse(record, "thickEnd", err))?
+                .context("Parsing thickEnd")?
             {
                 if thick_start >= thick_end {
                     return Ok(None);
@@ -337,7 +360,7 @@ where
                         thick_start as isize,
                         loc.strand(),
                     ))
-                    .ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?
+                    .ok_or_else(|| anyhow!("thickStart not within annot"))?
                     .pos();
 
                 // Right-most position _within_ the location
@@ -357,7 +380,7 @@ where
                         thick_end as isize - 1,
                         loc.strand(),
                     ))
-                    .ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?
+                    .ok_or_else(|| anyhow!("thickEnd-1 not in annot"))?
                     .pos()
                 };
 
@@ -458,33 +481,55 @@ pub fn splice_compatible<R: Clone + Eq>(
     true
 }
 
+/// A nucleotide position within a transcript
 pub struct TrxPos<'a, R: 'a> {
     transcript: &'a Transcript<R>,
     pos: usize,
 }
 
 impl<'a, R: 'a> TrxPos<'a, R> {
-    pub fn new(transcript: &'a Transcript<R>, pos: usize) -> Self {
-        TrxPos {
+    /// Construct a new transcript position
+    pub fn new(transcript: &'a Transcript<R>, pos: usize) -> Result<Self> {
+        ensure!(
+            pos < transcript.loc().exon_total_length(),
+            "Position {} beyond transcript length {}",
+            pos,
+            transcript.loc().exon_total_length()
+        );
+
+        Ok(TrxPos {
             transcript: transcript,
             pos: pos,
-        }
+        })
     }
 
+    /// Returns the reference transcript for the position
     pub fn transcript(&self) -> &'a Transcript<R> {
         self.transcript
     }
+
+    /// Returns the offset along the transcript
     pub fn pos(&self) -> usize {
         self.pos
     }
 
+    /// Returns the distance from the start of the transcript to the position.
     pub fn offset_from_trx_start(&self) -> isize {
         self.pos as isize
     }
+
+    /// Returns the distance from the end of the transcript to the position.
+    ///
+    /// This will always be negative.
     pub fn offset_from_trx_end(&self) -> isize {
-        self.transcript.loc().length() as isize - self.pos as isize
+        self.transcript.loc().exon_total_length() as isize - self.pos as isize
     }
 
+    /// Returns the distance from the start of the coding sequence to the position.
+    ///
+    /// This will be negative when the position is before the start of the
+    /// coding sequence, 0 when it is the first base of the start codon, and positive
+    /// otherwise.
     pub fn offset_from_cds_start(&self) -> Option<isize> {
         self.transcript
             .cds_range()
@@ -492,6 +537,11 @@ impl<'a, R: 'a> TrxPos<'a, R> {
             .map(|cds| self.pos as isize - cds.start as isize)
     }
 
+    /// Returns the distance from the end of the coding sequence to the position.
+    ///
+    /// This will be negative for all positions through the last base of
+    /// the stop codon, zero for the first base after the end of the coding
+    /// sequence, and positive beyond.
     pub fn offset_from_cds_end(&self) -> Option<isize> {
         self.transcript
             .cds_range()
@@ -506,6 +556,10 @@ impl<'a, R: 'a> TrxPos<'a, R> {
 }
 
 impl<'a, R: 'a + Eq> TrxPos<'a, R> {
+    /// Constructs a transcript position given a transcript and a genomic position.
+    ///
+    /// If the genomic position `gpos` does not fall within the transcript
+    /// and on the same strand, returns `None`.
     pub fn from_genomic_pos<'b>(
         transcript: &'a Transcript<R>,
         gpos: &'b Pos<R, ReqStrand>,
@@ -517,11 +571,12 @@ impl<'a, R: 'a + Eq> TrxPos<'a, R> {
                 ReqStrand::Forward => Some(tpos.pos()),
                 ReqStrand::Reverse => None,
             })
-            .map(|pos| Self::new(transcript, pos as usize))
+            .map(|pos| Self::new(transcript, pos as usize).expect("bad offset in from_genomic_pos"))
     }
 }
 
 impl<'a, R: Eq + Hash> TrxPos<'a, R> {
+    /// Transcript positions for a given genomic position, across a collection of transcripts.
     pub fn transcriptome_pos<'b, 'c>(
         tome: &'b Transcriptome<R>,
         gpos: &'c Pos<R, ReqStrand>,
@@ -535,6 +590,10 @@ impl<'a, R: Eq + Hash> TrxPos<'a, R> {
     }
 }
 
+/// Collection of named transcripts
+///
+/// Transcripts are grouped and indexed for efficient searching by
+/// name, position, and insertion order.
 pub struct Transcriptome<R>
 where
     R: Eq + Hash,
@@ -547,6 +606,7 @@ where
 }
 
 impl<R: Eq + Hash> Transcriptome<R> {
+    /// Constructs a new, empty transcript collection
     pub fn new() -> Self {
         Transcriptome {
             gene_to_trxnames: HashMap::new(),
@@ -557,10 +617,15 @@ impl<R: Eq + Hash> Transcriptome<R> {
         }
     }
 
+    /// Iterates over all transcript names, in the order of addition
     pub fn trxnames(&self) -> impl Iterator<Item = &R> {
         self.trxname_by_index.iter()
     }
 
+    /// Creates an iterator over all transcripts overlapping a location
+    ///
+    /// Transcripts will be included when they overlap `loc`
+    /// as per [`AnnotMap::find()`](bio::data_structures::annot_map::AnnotMap::find)
     pub fn find_at_loc<'a: 'c, 'b: 'c, 'c, L: Loc<RefID = R>>(
         &'a self,
         loc: &'b L,
@@ -572,6 +637,7 @@ impl<R: Eq + Hash> Transcriptome<R> {
         })
     }
 
+    /// Returns an iterator over all transcripts, in the order they were added
     pub fn transcripts(&self) -> impl Iterator<Item = &Transcript<R>> {
         self.trxname_by_index
             .iter()
@@ -583,9 +649,16 @@ impl<R> Transcriptome<R>
 where
     R: Deref<Target = String> + From<String> + Clone + Hash + Eq,
 {
-    pub fn insert(&mut self, transcript: Transcript<R>) -> Result<R, TrxError> {
+    /// Inserts a transcript into the collection
+    ///
+    /// # Errors
+    /// If the collection already contains a transcript with the same name
+    pub fn insert(&mut self, transcript: Transcript<R>) -> Result<R> {
         if self.trxname_to_transcript.contains_key(&transcript.trxname) {
-            return Err(TrxError::TrxExists(transcript.trxname.to_string()));
+            bail!(
+                "Transcript named {:?} already exists",
+                transcript.trxname.to_string()
+            );
         }
 
         let trxname = transcript.trxname.clone();
@@ -607,74 +680,22 @@ where
         Ok(trxname)
     }
 
+    /// Constructs a transcript collection from BED records
     pub fn new_from_bed<B: io::Read>(
         records: Records<B, bed::Record>,
         refids: &mut RefIDSet<R>,
-    ) -> Result<Transcriptome<R>, TrxError> {
+    ) -> Result<Transcriptome<R>> {
         let mut trxome = Self::new();
 
-        for recres in records {
+        for (lineno, recres) in records.enumerate() {
             // let rec = recres?;
             let rec = recres?;
-            let transcript = Transcript::from_bed12(&rec, refids)?;
+            let transcript = Transcript::from_bed12(&rec, refids)
+                .with_context(|| format!("Parsing line {}:\n{:?}", lineno + 1, rec))?;
             trxome.insert(transcript)?;
         }
 
         Ok(trxome)
-    }
-}
-
-#[derive(Debug)]
-pub enum TrxError {
-    Bed(String),
-    BedCsv(csv::Error),
-    BedParse(String, ParseIntError),
-    BedRead(anyhow::Error),
-    BedSplicing(String, SplicingError),
-    Cds(String),
-    TrxExists(String),
-}
-
-impl TrxError {
-    fn bed(record: &bed::Record, message: &str) -> TrxError {
-        TrxError::Bed(format!("{} converting BED record {:?}", message, record))
-    }
-
-    fn bed_parse(record: &bed::Record, message: &str, parse_error: ParseIntError) -> TrxError {
-        TrxError::BedParse(
-            format!("{} parsing BED record {:?}", message, record),
-            parse_error,
-        )
-    }
-}
-
-impl Error for TrxError {}
-
-impl From<csv::Error> for TrxError {
-    fn from(value: csv::Error) -> Self {
-        TrxError::BedCsv(value)
-    }
-}
-
-impl fmt::Display for TrxError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            TrxError::Bed(msg) => write!(f, "BED record to transcript: {}", msg),
-            TrxError::BedCsv(err) => write!(f, "BED record CSV parsing: {:?}", err),
-            TrxError::BedParse(msg, err) => write!(
-                f,
-                "BED record to transcript: {}: parsing error {}",
-                msg, err
-            ),
-            TrxError::BedRead(err) => write!(f, "Reading BED records: {}", err),
-            TrxError::BedSplicing(msg, err) => write!(
-                f,
-                "BED record to transcript: {}: splicing error {}",
-                msg, err
-            ),
-            TrxError::Cds(msg) => write!(f, "CDS on transcript: {}", msg),
-            TrxError::TrxExists(trx) => write!(f, "Transcript already exists: {}", trx),
-        }
     }
 }
 
