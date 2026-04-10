@@ -1,12 +1,11 @@
 use std::ops::Deref;
 
-use failure;
-
+use anyhow::{Result, anyhow};
 use bio_types::annot::refids::RefIDSet;
 use bio_types::annot::spliced::Spliced;
 use bio_types::strand::ReqStrand;
 use rust_htslib::bam;
-use rust_htslib::bam::{record::Cigar, record::CigarStringView, HeaderView};
+use rust_htslib::bam::{HeaderView, record::Cigar, record::CigarStringView};
 
 pub struct Tids<R> {
     tids: Vec<R>,
@@ -33,10 +32,35 @@ impl<R> Tids<R> {
     }
 }
 
+/// TODO Unify code paths
+pub fn bam_to_spliced_tid(record: &bam::Record) -> Result<Option<Spliced<u32, ReqStrand>>> {
+    if record.tid() < 0 {
+        return Ok(None);
+    }
+
+    let (lengths, starts) = cigar_to_lengths_starts(&record.cigar());
+
+    let strand = if record.is_reverse() {
+        ReqStrand::Reverse
+    } else {
+        ReqStrand::Forward
+    };
+
+    let spliced = Spliced::with_lengths_starts(
+        record.tid() as u32,
+        record.pos() as isize,
+        lengths.as_slice(),
+        starts.as_slice(),
+        strand,
+    )?;
+
+    Ok(Some(spliced))
+}
+
 pub fn bam_to_spliced<R>(
     tids: &Tids<R>,
     record: &bam::Record,
-) -> Result<Option<Spliced<R, ReqStrand>>, failure::Error>
+) -> Result<Option<Spliced<R, ReqStrand>>>
 where
     R: Clone,
 {
@@ -48,7 +72,7 @@ where
 
     let refid = tids
         .get(record.tid() as u32)
-        .ok_or_else(|| failure::err_msg(format!("BAM target ID {} out of range", record.tid())))?;
+        .ok_or_else(|| anyhow!("BAM target ID {} out of range", record.tid()))?;
 
     let strand = if record.is_reverse() {
         ReqStrand::Reverse

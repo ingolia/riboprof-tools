@@ -1,12 +1,12 @@
 use std::cell::*;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::error;
 use std::fmt;
 use std::rc::Rc;
 use std::str;
 
-use failure;
+use anyhow::Result;
 
 #[derive(Debug, Clone)]
 pub struct SampleMap<T> {
@@ -55,7 +55,7 @@ impl<T> SampleMap<T> {
         index: Vec<u8>,
         allow_mismatch: bool,
         thing: T,
-    ) -> Result<Rc<RefCell<T>>, failure::Error> {
+    ) -> Result<Rc<RefCell<T>>> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index).into());
         }
@@ -81,11 +81,7 @@ impl<T> SampleMap<T> {
         Ok(rcrc)
     }
 
-    fn insert_index(
-        &mut self,
-        index: Vec<u8>,
-        entry: SampleEntry<T>,
-    ) -> Result<(), failure::Error> {
+    fn insert_index(&mut self, index: Vec<u8>, entry: SampleEntry<T>) -> Result<()> {
         match self.index_map.entry(index) {
             Entry::Occupied(occ) => Err(SampleError::IndexClash(occ.key().to_vec())),
             Entry::Vacant(vac) => Ok(vac.insert(entry)),
@@ -94,7 +90,7 @@ impl<T> SampleMap<T> {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, index: &[u8]) -> Result<Ref<T>, failure::Error> {
+    pub fn get(&self, index: &[u8]) -> Result<Ref<'_, T>> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
@@ -104,7 +100,7 @@ impl<T> SampleMap<T> {
         Ok(thing)
     }
 
-    pub fn get_mut(&mut self, index: &[u8]) -> Result<RefMut<T>, failure::Error> {
+    pub fn get_mut(&mut self, index: &[u8]) -> Result<RefMut<'_, T>> {
         if index.len() != self.index_length {
             return Err(SampleError::IndexBadLength(self.index_length, index.to_vec()).into());
         }
@@ -138,11 +134,11 @@ impl<T: fmt::Display> SampleMap<T> {
     }
 }
 
-pub fn parse_sample_sheet(sheet: &str) -> Result<Vec<(String, String)>, failure::Error> {
+pub fn parse_sample_sheet(sheet: &str) -> Result<Vec<(String, String)>> {
     sheet.lines().map(parse_sample_line).collect()
 }
 
-fn parse_sample_line(line: &str) -> Result<(String, String), failure::Error> {
+fn parse_sample_line(line: &str) -> Result<(String, String)> {
     let mut field_iter = line.split(',');
     let name = field_iter
         .next()

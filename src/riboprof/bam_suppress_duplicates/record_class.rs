@@ -6,19 +6,19 @@ use rust_htslib::bam;
 /// equivalence comparisons, and the minimum running time, scales
 /// according to _N*M_, where _N_ is the number of records and _M_ is
 /// the number of groups.
-pub struct RecordClass<'a> {
+pub struct RecordClass<'a, F> {
     classes: Vec<Vec<bam::Record>>,
-    same_class: &'a Fn(&bam::Record, &bam::Record) -> bool,
+    same_class: &'a F, //Fn(&bam::Record, &bam::Record) -> bool,
 }
 
-impl<'a> RecordClass<'a> {
+impl<'a, F: Fn(&bam::Record, &bam::Record) -> bool> RecordClass<'a, F> {
     /// Create a new BAM record classifier.
     ///
     /// # Arguments
     ///
     /// * `same_class` specifies an equivalence function over BAM
     /// records for grouping.
-    pub fn new(same_class: &'a Fn(&bam::Record, &bam::Record) -> bool) -> Self {
+    pub fn new(same_class: &'a F) -> Self {
         RecordClass {
             classes: Vec::new(),
             same_class: same_class,

@@ -1,14 +1,10 @@
-extern crate clap;
-extern crate failure;
-
-extern crate riboprof;
-
 use std::io;
 use std::io::Write;
 use std::process;
 
-use clap::{App, Arg};
+use clap::{Arg, ArgAction, Command};
 
+use anyhow::Result;
 use riboprof::fp_framing::*;
 
 fn main() {
@@ -21,100 +17,119 @@ fn main() {
     };
 }
 
-fn wrapper() -> Result<(), failure::Error> {
+fn wrapper() -> Result<()> {
     let cli = get_cli()?;
     let config = Config::new(&cli)?;
     run_fp_framing(config)
 }
 
-fn get_cli() -> Result<CLI, failure::Error> {
-    let matches = App::new("fp-framing")
+fn get_cli() -> Result<CLI> {
+    let matches = Command::new("fp-framing")
         .version("0.1.0")
         .author("Nick Ingolia <ingolia@berkeley.edu>")
         .about("Calculates ribosome profiling QC information including reading frame bias and start and stop codon meta-genes")
         .arg(
-            Arg::with_name("output")
-                .short("o")
+            Arg::new("output")
+                .short('o')
                 .long("output")
                 .value_name("OUTBASE")
                 .help("Base filename for output files")
-                .takes_value(true)
+                .action(ArgAction::Set)
                 .required(true),
         )
         .arg(
-            Arg::with_name("bed")
-                .short("b")
+            Arg::new("bed")
+                .short('b')
                 .long("bed")
                 .value_name("BED")
                 .help("BED-format annotation filename")
-                .takes_value(true)
+                .action(ArgAction::Set)
                 .required(true),
         )
         .arg(
-            Arg::with_name("genes")
-                .short("g")
+            Arg::new("genes")
+                .short('g')
                 .long("genes")
                 .value_name("GENES.TXT")
                 .help("Tab-delimited table of Transcript<TAB>Gene (or just Transcript to suppress a transcript)")
-                .takes_value(true)
-                .multiple(true)
-                .number_of_values(1),
+                .action(ArgAction::Append)
         )
         .arg(
-            Arg::with_name("flanking")
-                .short("f")
+            Arg::new("flanking")
+                .short('f')
                 .long("flanking")
                 .value_name("START,END")
                 .help("Range of profiles surrounding the start and end codons")
-                .takes_value(true)
+                .action(ArgAction::Set)
                 .default_value("-100,100"),
         )
         .arg(
-            Arg::with_name("cdsbody")
-                .short("c")
+            Arg::new("cdsbody")
+                .short('c')
                 .long("cdsbody")
                 .value_name("AFTERSTART,BEFOREEND")
                 .help("Offsets from the start and end of the gene for framing analysis")
-                .takes_value(true)
+                .action(ArgAction::Set)
                 .default_value("34,31"),
         )
         .arg(
-            Arg::with_name("lengths")
-                .short("l")
+            Arg::new("lengths")
+                .short('l')
                 .long("lengths")
                 .value_name("MINLEN,MAXLEN")
                 .help("Length frange for framing analysis")
-                .takes_value(true)
+                .action(ArgAction::Set)
                 .default_value("26,34"),
         )
         .arg(
-            Arg::with_name("count-multi")
-                .short("m")
+            Arg::new("count-multi")
+                .short('m')
                 .long("count-multi")
                 .help("Count multi-mapping reads once, at their first occurrence (i.e., HI = 0)")
+                .action(ArgAction::SetTrue)
         )
         .arg(
-            Arg::with_name("annotate")
-                .short("a")
+            Arg::new("annotate")
+                .short('a')
                 .long("annotate")
                 .value_name("ANNOTATED.BAM")
                 .help("Write output BAM file annotated wiht framing information")
-                .takes_value(true)
+                .action(ArgAction::Set)
         )
-        .arg(Arg::with_name("input").value_name("INPUT.BAM").required(true))
+        .arg(Arg::new("input").value_name("INPUT.BAM").required(true))
         .get_matches();
 
     Ok(CLI {
-        output: matches.value_of("output").unwrap().to_string(),
-        bed: matches.value_of("bed").unwrap().to_string(),
+        output: matches
+            .get_one::<String>("output")
+            .expect("output is missing")
+            .to_string(),
+        bed: matches
+            .get_one::<String>("bed")
+            .expect("bed file is missing")
+            .to_string(),
         genes: matches
-            .values_of_lossy("genes")
-            .unwrap_or_else(|| Vec::new()),
-        flanking: matches.value_of("flanking").unwrap().to_string(),
-        cdsbody: matches.value_of("cdsbody").unwrap().to_string(),
-        lengths: matches.value_of("lengths").unwrap().to_string(),
-        count_multi: matches.is_present("count-multi"),
-        annotate: matches.value_of_lossy("annotate").map(|a| a.to_string()),
-        input: matches.value_of("input").unwrap().to_string(),
+            .get_many::<String>("genes")
+            .map_or_else(|| Vec::new(), |v| v.map(|s| s.to_string()).collect()),
+        flanking: matches
+            .get_one::<String>("flanking")
+            .expect("flanking is missing")
+            .to_string(),
+        cdsbody: matches
+            .get_one::<String>("cdsbody")
+            .expect("cdsbody is missing")
+            .to_string(),
+        lengths: matches
+            .get_one::<String>("lengths")
+            .expect("length range is missing")
+            .to_string(),
+        count_multi: matches.get_flag("count-multi"),
+        annotate: matches
+            .get_many::<String>("annotate")
+            .map(|r| r.map(|a| a.to_string()).collect()),
+        input: matches
+            .get_one::<String>("input")
+            .expect("input is missing")
+            .to_string(),
     })
 }

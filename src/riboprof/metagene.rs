@@ -1,11 +1,7 @@
 use std::default::Default;
-//use std::error::Error;
-//use std::fmt;
 use std::iter;
 use std::slice;
 use std::vec;
-
-//use failure;
 
 #[derive(Clone, Debug)]
 pub struct LenProfile<T> {

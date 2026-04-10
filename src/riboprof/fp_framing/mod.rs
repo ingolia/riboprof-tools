@@ -7,21 +7,21 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str;
 
-use failure;
-
+use anyhow::Result;
 use bio::io::bed;
 use bio_types::annot::refids::RefIDSet;
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
 
-use bam_utils::*;
-use transcript::*;
+use crate::bam_utils::*;
+use crate::parse_pair;
+use crate::transcript::*;
 
 mod framing;
 mod stats;
 
-use fp_framing::framing::*;
-use fp_framing::stats::*;
+use crate::fp_framing::framing::*;
+use crate::fp_framing::stats::*;
 
 pub struct CLI {
     pub input: String,
@@ -47,18 +47,18 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(cli: &CLI) -> Result<Self, failure::Error> {
+    pub fn new(cli: &CLI) -> Result<Self> {
         let trxome = Self::read_transcriptome(&cli)?;
 
-        let cdsbody_range = Self::parse_pair(&cli.cdsbody)?;
+        let cdsbody_range = parse_pair(&cli.cdsbody)?;
 
         Ok(Config {
             input: cli.input.to_string(),
             output: Path::new(&cli.output).to_path_buf(),
             trxome: trxome,
-            flanking: Self::parse_pair(&cli.flanking)?,
+            flanking: parse_pair(&cli.flanking)?,
             cdsbody: (cdsbody_range.start, cdsbody_range.end),
-            lengths: Self::parse_pair(&cli.lengths)?,
+            lengths: parse_pair(&cli.lengths)?,
             count_multi: cli.count_multi,
             annotate: cli
                 .annotate
@@ -78,12 +78,14 @@ impl Config {
         filepath
     }
 
-    fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>, failure::Error> {
+    fn read_transcriptome(cli: &CLI) -> Result<Transcriptome<Rc<String>>> {
         // ZZZ Handle Trx->Gene mappings
         let mut refids = RefIDSet::new();
         let mut trxome = Transcriptome::new();
 
-        for recres in bed::Reader::from_file(&cli.bed)?.records() {
+        let mut bed_reader = bed::Reader::from_file(&cli.bed)?;
+
+        for recres in bed_reader.records() {
             let rec = recres?;
             let trx = Transcript::from_bed12(&rec, &mut refids)?;
             trxome.insert(trx)?;
@@ -91,28 +93,9 @@ impl Config {
 
         Ok(trxome)
     }
-
-    fn parse_pair<I>(pair_str: &str) -> Result<Range<I>, failure::Error>
-    where
-        I: str::FromStr,
-        I::Err: Error + Send + Sized + Sync + 'static,
-    {
-        let strs: Vec<&str> = pair_str.split(",").collect();
-        if strs.len() == 2 {
-            Ok(Range {
-                start: strs[0].parse()?,
-                end: strs[1].parse()?,
-            })
-        } else {
-            Err(failure::err_msg(format!(
-                "Expecting integer pair \"a,b\" but got \"{}\"",
-                pair_str
-            )))
-        }
-    }
 }
 
-pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
+pub fn run_fp_framing(config: Config) -> Result<()> {
     let mut input = if config.input == "-" {
         bam::Reader::from_stdin()?
     } else {
@@ -128,10 +111,14 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
     let mut stats_file = fs::File::create(&config.output_filename("_framing_stats.txt"))?;
 
     let mut annotate = match config.annotate {
-        None => None,
+        Option::None => None,
         Some(ref annot_file) => {
             let header = bam::Header::from_template(input.header());
-            Some(bam::Writer::from_path(Path::new(&annot_file), &header)?)
+            Some(bam::Writer::from_path(
+                Path::new(&annot_file),
+                &header,
+                bam::Format::Bam,
+            )?)
         }
     };
 
@@ -151,8 +138,11 @@ pub fn run_fp_framing(config: Config) -> Result<(), failure::Error> {
 
         framing_stats.tally_bam_frame(&res);
 
-        if let Some(ref mut ann_writer) = &mut annotate {
-            rec.push_aux(b"ZF", &bam::record::Aux::String(&res.aux()))?;
+        if let Some(ann_writer) = &mut annotate {
+            rec.push_aux(
+                b"ZF",
+                bam::record::Aux::String(std::str::from_utf8(&res.aux())?),
+            )?;
             ann_writer.write(&rec)?;
         }
     }

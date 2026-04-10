@@ -26,14 +26,15 @@ impl Stats {
 
     fn index(&self, ntotal: usize, nunique: usize) -> usize {
         (if ntotal >= self.nlim {
-            (self.nlim - 1)
+            self.nlim - 1
         } else {
             ntotal
-        }) * self.nlim + (if nunique >= self.nlim {
-            (self.nlim - 1)
-        } else {
-            nunique
-        })
+        }) * self.nlim
+            + (if nunique >= self.nlim {
+                self.nlim - 1
+            } else {
+                nunique
+            })
     }
 
     pub fn untagged_reads(&self) -> u64 {

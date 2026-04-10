@@ -1,8 +1,7 @@
 use std::error;
 use std::fmt;
 
-use failure;
-
+use anyhow::Result;
 use bio::io::fastq;
 
 /// Nucleotide type in the linker, either a unique molecule identifier
@@ -23,7 +22,7 @@ impl LinkerNtSpec {
     ///
     /// # Errors
     /// An error variant is returned for any other character.
-    pub fn new(ch: char) -> Result<Self, failure::Error> {
+    pub fn new(ch: char) -> Result<Self> {
         match ch {
             'N' => Ok(LinkerNtSpec::UMI),
             'I' => Ok(LinkerNtSpec::SampleIndex),
@@ -66,10 +65,10 @@ impl LinkerSpec {
     /// # Errors
     /// An error variant is returned when any of the characters in the
     /// specification strings cannot be parsed.
-    pub fn new(prefix_str: &str, suffix_str: &str) -> Result<Self, failure::Error> {
-        let prefix_res: Result<Vec<LinkerNtSpec>, failure::Error> =
+    pub fn new(prefix_str: &str, suffix_str: &str) -> Result<Self> {
+        let prefix_res: Result<Vec<LinkerNtSpec>> =
             prefix_str.chars().map(LinkerNtSpec::new).collect();
-        let suffix_res: Result<Vec<LinkerNtSpec>, failure::Error> =
+        let suffix_res: Result<Vec<LinkerNtSpec>> =
             suffix_str.chars().map(LinkerNtSpec::new).collect();
 
         let prefix = prefix_res?;

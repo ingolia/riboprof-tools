@@ -7,10 +7,9 @@ use std::io;
 use std::num::ParseIntError;
 use std::ops::{Deref, Range};
 
-use failure;
-
 use bio::data_structures::annot_map::AnnotMap;
 use bio::io::bed;
+use bio::io::common::Records;
 use bio_types::annot::loc::Loc;
 use bio_types::annot::pos::*;
 use bio_types::annot::refids::RefIDSet;
@@ -103,12 +102,22 @@ where
 {
     /// Returns the gene name for the transcript as a `&str`.
     pub fn gene(&self) -> &str {
-        &self.gene
+        self.gene.deref()
     }
 
     /// Returns the name of the transcript as a `&str`.
     pub fn trxname(&self) -> &str {
-        &self.trxname
+        self.trxname.deref()
+    }
+
+    /// Returns a "fetch description" to retrieve reads from an indexed BAM file
+    /// based on the transcript locatioin.
+    pub fn fetch_desc(&self) -> (&str, i64, i64) {
+        (
+            self.loc.refid().deref(),
+            self.loc.start() as i64,
+            self.loc.start() as i64 + self.loc.length() as i64,
+        )
     }
 }
 
@@ -297,71 +306,76 @@ where
             &block_sizes,
             &block_starts,
             strand,
-        ).map_err(|err| {
-            TrxError::BedSplicing(format!("Splicing error on record {:?}", record), err)
-        })
+        )
+        .map_err(|err| TrxError::BedSplicing(format!("Splicing error on record {:?}", record), err))
     }
 
     fn cds_from_bed(
         record: &bed::Record,
         loc: &Spliced<R, ReqStrand>,
     ) -> Result<Option<Range<usize>>, TrxError> {
-        let thick_start = match record.aux(Self::THICK_START_COL) {
-            Some(start_str) => start_str
-                .parse::<usize>()
-                .map_err(|err| TrxError::bed_parse(record, "thickStart", err))?,
-            None => return Ok(None),
-        };
+        if let Some(thick_start) = record
+            .aux(Self::THICK_START_COL)
+            .map(|start_str| start_str.parse::<usize>())
+            .transpose()
+            .map_err(|err| TrxError::bed_parse(record, "thickStart", err))?
+        {
+            if let Some(thick_end) = record
+                .aux(Self::THICK_END_COL)
+                .map(|end_str| end_str.parse::<usize>())
+                .transpose()
+                .map_err(|err| TrxError::bed_parse(record, "thickEnd", err))?
+            {
+                if thick_start >= thick_end {
+                    return Ok(None);
+                }
 
-        let thick_end = match record.aux(Self::THICK_END_COL) {
-            Some(end_str) => end_str
-                .parse::<usize>()
-                .map_err(|err| TrxError::bed_parse(record, "thickEnd", err))?,
-            None => return Ok(None),
-        };
+                // Left-most position within the location
+                let left_pos = loc
+                    .pos_into(&Pos::new(
+                        loc.refid().clone(),
+                        thick_start as isize,
+                        loc.strand(),
+                    ))
+                    .ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?
+                    .pos();
 
-        if thick_start >= thick_end {
-            return Ok(None);
-        }
+                // Right-most position _within_ the location
+                // When CDS extends to right edge of transcript, then thickEnd is _outside_
+                let right_pos = if let Some(pos) = loc.pos_into(&Pos::new(
+                    loc.refid().clone(),
+                    thick_end as isize,
+                    loc.strand(),
+                )) {
+                    match loc.strand() {
+                        ReqStrand::Forward => pos.pos() - 1,
+                        ReqStrand::Reverse => pos.pos() + 1,
+                    }
+                } else {
+                    loc.pos_into(&Pos::new(
+                        loc.refid().clone(),
+                        thick_end as isize - 1,
+                        loc.strand(),
+                    ))
+                    .ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?
+                    .pos()
+                };
 
-        // Left-most position within the location
-        let left_pos =
-            loc.pos_into(&Pos::new(
-                loc.refid().clone(),
-                thick_start as isize,
-                loc.strand(),
-            )).ok_or_else(|| TrxError::bed(record, "thickStart not in annot"))?
-                .pos();
+                let start = min(left_pos, right_pos) as usize;
+                let last = max(left_pos, right_pos) as usize;
 
-        // Right-most position _within_ the location
-        // When CDS extends to right edge of transcript, then thickEnd is _outside_
-        let right_pos = if let Some(pos) = loc.pos_into(&Pos::new(
-            loc.refid().clone(),
-            thick_end as isize,
-            loc.strand(),
-        )) {
-            match loc.strand() {
-                ReqStrand::Forward => pos.pos() - 1,
-                ReqStrand::Reverse => pos.pos() + 1,
+                assert!(last >= start);
+
+                Ok(Some(Range {
+                    start: start,
+                    end: last + 1,
+                }))
+            } else {
+                Ok(None)
             }
         } else {
-            loc.pos_into(&Pos::new(
-                loc.refid().clone(),
-                thick_end as isize - 1,
-                loc.strand(),
-            )).ok_or_else(|| TrxError::bed(record, "thickEnd-1 not in annot"))?
-                .pos()
-        };
-
-        let start = min(left_pos, right_pos) as usize;
-        let last = max(left_pos, right_pos) as usize;
-
-        assert!(last >= start);
-
-        Ok(Some(Range {
-            start: start,
-            end: last + 1,
-        }))
+            Ok(None)
+        }
     }
 }
 
@@ -529,6 +543,7 @@ where
     trxname_to_gene: HashMap<R, R>,
     trxname_to_transcript: HashMap<R, Transcript<R>>,
     trxname_by_location: AnnotMap<R, R>,
+    trxname_by_index: Vec<R>,
 }
 
 impl<R: Eq + Hash> Transcriptome<R> {
@@ -538,11 +553,12 @@ impl<R: Eq + Hash> Transcriptome<R> {
             trxname_to_gene: HashMap::new(),
             trxname_to_transcript: HashMap::new(),
             trxname_by_location: AnnotMap::new(),
+            trxname_by_index: Vec::new(),
         }
     }
 
     pub fn trxnames(&self) -> impl Iterator<Item = &R> {
-        self.trxname_to_transcript.keys()
+        self.trxname_by_index.iter()
     }
 
     pub fn find_at_loc<'a: 'c, 'b: 'c, 'c, L: Loc<RefID = R>>(
@@ -554,6 +570,12 @@ impl<R: Eq + Hash> Transcriptome<R> {
                 .get(ent.data())
                 .expect("transcript missing from map")
         })
+    }
+
+    pub fn transcripts(&self) -> impl Iterator<Item = &Transcript<R>> {
+        self.trxname_by_index
+            .iter()
+            .map(|t| self.trxname_to_transcript.get(t).unwrap())
     }
 }
 
@@ -580,17 +602,20 @@ where
         self.trxname_to_transcript
             .insert(trxname.clone(), transcript);
 
+        self.trxname_by_index.push(trxname.clone());
+
         Ok(trxname)
     }
 
     pub fn new_from_bed<B: io::Read>(
-        records: bed::Records<B>,
+        records: Records<B, bed::Record>,
         refids: &mut RefIDSet<R>,
     ) -> Result<Transcriptome<R>, TrxError> {
         let mut trxome = Self::new();
 
         for recres in records {
-            let rec = recres.map_err(|err| TrxError::BedRead(err.into()))?;
+            // let rec = recres?;
+            let rec = recres?;
             let transcript = Transcript::from_bed12(&rec, refids)?;
             trxome.insert(transcript)?;
         }
@@ -602,8 +627,9 @@ where
 #[derive(Debug)]
 pub enum TrxError {
     Bed(String),
+    BedCsv(csv::Error),
     BedParse(String, ParseIntError),
-    BedRead(failure::Error),
+    BedRead(anyhow::Error),
     BedSplicing(String, SplicingError),
     Cds(String),
     TrxExists(String),
@@ -624,10 +650,17 @@ impl TrxError {
 
 impl Error for TrxError {}
 
+impl From<csv::Error> for TrxError {
+    fn from(value: csv::Error) -> Self {
+        TrxError::BedCsv(value)
+    }
+}
+
 impl fmt::Display for TrxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             TrxError::Bed(msg) => write!(f, "BED record to transcript: {}", msg),
+            TrxError::BedCsv(err) => write!(f, "BED record CSV parsing: {:?}", err),
             TrxError::BedParse(msg, err) => write!(
                 f,
                 "BED record to transcript: {}: parsing error {}",
@@ -651,11 +684,7 @@ mod tests {
 
     use super::*;
 
-    use std::cell::*;
-    use std::ops::*;
     use std::rc::*;
-
-    use self::csv::Error;
 
     fn record_from_str(recstr: &str) -> bed::Record {
         bed::Reader::new(recstr.as_bytes())
@@ -776,7 +805,7 @@ mod tests {
         let pos: Pos<R, ReqStrand> = posstr.parse().expect("Parsing position");
         let mut trxs: Vec<String> = tome
             .find_at_loc(&pos)
-            .map(|trx| trx.trxname().deref().to_string())
+            .map(|trx| trx.trxname().to_string())
             .collect();
         trxs.sort();
         trxs

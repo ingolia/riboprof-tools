@@ -3,17 +3,16 @@ use std::fmt;
 use std::io;
 use std::str;
 
-use failure;
-
+use anyhow::Result;
 use bio::io::fastq;
 
-use fastx_split::linkers::*;
+use crate::fastx_split::linkers::*;
 
 /// Collected information about one particular sample
 pub struct Sample {
     name: String,
     index: Vec<u8>,
-    dest: fastq::Writer<Box<io::Write>>,
+    dest: fastq::Writer<Box<dyn io::Write>>,
     total: usize,
     umi_count: HashMap<Vec<u8>, usize>,
 }
@@ -58,11 +57,7 @@ impl Sample {
     ///
     /// An error variant is returned when problems arise in writing
     /// the processed fastq record to the output file.
-    pub fn handle_split_read(
-        &mut self,
-        fq: &fastq::Record,
-        split: &LinkerSplit,
-    ) -> Result<(), failure::Error> {
+    pub fn handle_split_read(&mut self, fq: &fastq::Record, split: &LinkerSplit) -> Result<()> {
         let umi_id = format!("{}#{}", fq.id(), str::from_utf8(split.umi())?);
         let splitfq = fastq::Record::with_attrs(
             umi_id.as_str(),
@@ -122,7 +117,7 @@ impl Sample {
             .into_iter()
             .map(|nt| {
                 let mut ext = umi.to_vec();
-                ext.push(*nt);
+                ext.push(nt);
                 ext
             })
             .collect()
@@ -140,10 +135,7 @@ mod tests {
     use super::*;
 
     use std::cell::*;
-    use std::ops::*;
     use std::rc::*;
-
-    use fastx_split::linkers::*;
 
     struct TestWriter {
         dest: Rc<RefCell<Vec<u8>>>,
@@ -203,7 +195,8 @@ mod tests {
                 let mut seq = b"TGGTGCCGCAAC".to_vec();
                 seq.push(*nt1);
                 seq.push(*nt2);
-                let rec = fastq::Record::with_attrs("test", None, &seq, &vec![40; seq.len()]);
+                let rec =
+                    fastq::Record::with_attrs("test", None, &seq.as_slice(), &vec![40; seq.len()]);
                 let spl = linker_spec.split_record(&rec).unwrap();
                 sample.handle_split_read(&rec, &spl).unwrap();
             }
