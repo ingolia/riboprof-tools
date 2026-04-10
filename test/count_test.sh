@@ -14,5 +14,6 @@ do
 		     -b ${GENOME} \
 		     ~/Prog/riboprof-tools/test/${BASE}.bam \
 		     -a ${ASITES} \
+			 -d \
 		     -o ${BASE}_rs_count.txt
 done

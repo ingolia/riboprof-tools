@@ -38,13 +38,7 @@ pub struct Config {
     trxome: Transcriptome<Rc<String>>,
     refids: RefIDSet<Rc<String>>,
     count_config: CountConfig,
-    // asites: ASites,
-    // cds_insets: Range<isize>,
-    // nhits: bool,
-    // whole: bool,
-    #[allow(dead_code)]
     debug: bool,
-    // strand: ReqStrand,
 }
 
 impl Config {
@@ -89,8 +83,7 @@ pub fn run_fp_count_from_cli(cli: &CLI) -> Result<()> {
 pub fn run_fp_count(mut config: Config) -> Result<()> {
     let tids = Tids::new(&mut config.refids, &config.input.header());
 
-    let mut total_compat = 0.0;
-    let mut total_strand = 0.0;
+    let mut total = Count::new();
 
     for trx in config.trxome.transcripts() {
         let mut trx_count = Count::new();
@@ -101,8 +94,7 @@ pub fn run_fp_count(mut config: Config) -> Result<()> {
             trx_count.tally_record(&config.count_config, &trx, &tids, &rec)?;
         }
 
-        total_compat += trx_count.compat();
-        total_strand += trx_count.strand();
+        total += &trx_count;
 
         write!(
             config.output,
@@ -113,10 +105,17 @@ pub fn run_fp_count(mut config: Config) -> Result<()> {
         )?;
     }
 
-    if total_strand > total_compat {
-        println!("WARNING: {:.1} wrong-strand reads > {:.1} correct-strand reads",
-            total_strand, total_compat);
+    if total.strand() > total.compat() {
+        println!(
+            "WARNING: {:.1} wrong-strand reads > {:.1} correct-strand reads",
+            total.strand(),
+            total.compat()
+        );
         println!("         Alignment strand may be wrong");
+    }
+
+    if config.debug {
+        print!("{}", total.report());
     }
 
     Ok(())

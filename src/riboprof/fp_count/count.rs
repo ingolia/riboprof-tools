@@ -185,9 +185,13 @@ impl CountConfig {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Count {
     compat: f64,
     strand: f64,
+    upstream: f64,
+    downstream: f64,
+    asite: f64,
     incompat: f64,
 }
 
@@ -204,9 +208,40 @@ impl Count {
         self.strand
     }
 
-    #[allow(dead_code)]
+    pub fn upstream(&self) -> f64 {
+        self.upstream
+    }
+
+    pub fn downstream(&self) -> f64 {
+        self.downstream
+    }
+
+    pub fn asite(&self) -> f64 {
+        self.asite
+    }
+
     pub fn incompat(&self) -> f64 {
         self.incompat
+    }
+
+    pub fn total(&self) -> f64 {
+        self.compat + self.strand + self.upstream + self.downstream + self.asite
+    }
+
+    pub fn report(&self) -> String {
+        fn report_one(name: &str, num: f64, ttl: f64) -> String {
+            format!("{:14} {:12.1}  {:0.3}\n", name, num, num / ttl)
+        }
+        let mut out = String::new();
+        out.push_str(&report_one("compatible:", self.compat(), self.total()));
+        // &format!("compatible:   {:12.1}", self.compat()));
+        out.push_str(&report_one("wrong strand:", self.strand(), self.total()));
+        out.push_str(&report_one("upstream:", self.upstream(), self.total()));
+        out.push_str(&report_one("downstream:", self.downstream(), self.total()));
+        out.push_str(&report_one("no a site:", self.asite(), self.total()));
+        out.push_str(&report_one("incompatible:", self.incompat(), self.total()));
+        out.push_str(&report_one("TOTAL", self.total(), self.total()));
+        out
     }
 
     pub fn tally_record(
@@ -219,12 +254,14 @@ impl Count {
         let compat = config.bam_compat(trx, tids, rec)?;
         let weight = config.record_weight(&rec)?;
 
-        if compat == Compat::Compat {
-            self.compat += weight;
-        } else if compat == Compat::IncompatStrand {
-            self.strand += weight;
-        } else {
-            self.incompat += weight;
+        match compat {
+            Compat::Compat => self.compat += weight,
+            Compat::IncompatStrand => self.strand += weight,
+            Compat::IncompatUpstream => self.upstream += weight,
+            Compat::IncompatDownstream => self.downstream += weight,
+            Compat::IncompatASite => self.asite += weight,
+            Compat::IncompatNoCDS => self.incompat += weight,
+            Compat::IncompatSplice => self.incompat += weight,
         }
 
         Ok(())
@@ -236,7 +273,21 @@ impl std::default::Default for Count {
         Count {
             compat: 0.0,
             strand: 0.0,
+            upstream: 0.0,
+            downstream: 0.0,
+            asite: 0.0,
             incompat: 0.0,
         }
+    }
+}
+
+impl std::ops::AddAssign<&Count> for Count {
+    fn add_assign(&mut self, rhs: &Count) {
+        self.compat += rhs.compat;
+        self.strand += rhs.strand;
+        self.upstream += rhs.upstream;
+        self.downstream += rhs.downstream;
+        self.asite += rhs.asite;
+        self.incompat += rhs.incompat;
     }
 }

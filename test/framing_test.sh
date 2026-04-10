@@ -13,5 +13,14 @@ do
 		     -b ${GENOME} \
 		     ~/Prog/riboprof-tools/test/${BASE}.bam \
 		     -a ${BASE}_rsannot.bam \
-		     -o ${BASE}_rs
+		     -o ${BASE}_rs &
+
+    RUST_BACKTRACE=1 ~/Prog/riboprof-tools/target/debug/fp-framing \
+		     -l 27,29 \
+		     -b ${GENOME} \
+		     ~/Prog/riboprof-tools/test/${BASE}.bam \
+		     -o ${BASE}_rs_narrow &
+
 done
+
+wait
