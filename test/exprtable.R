@@ -25,3 +25,4 @@ write.table(table(qeSummary$riboBucket),
 
 present <- qeTable[qeSummary$riboBucket > 31,]
 write.csv(present, sprintf("%s/exprtable-present.csv", exprDir))
+cor(qeTable[qeSummary$riboBucket > 31,], method="spearman")

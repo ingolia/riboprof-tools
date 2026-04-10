@@ -15,5 +15,7 @@ do
 		     ~/Prog/riboprof-tools/test/${BASE}.bam \
 		     -a ${ASITES} \
 			 -d \
-		     -o ${BASE}_rs_count.txt
+		     -o ${BASE}_rs_count.txt &
 done
+
+wait

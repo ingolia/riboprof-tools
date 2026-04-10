@@ -543,6 +543,7 @@ where
     trxname_to_gene: HashMap<R, R>,
     trxname_to_transcript: HashMap<R, Transcript<R>>,
     trxname_by_location: AnnotMap<R, R>,
+    trxname_by_index: Vec<R>,
 }
 
 impl<R: Eq + Hash> Transcriptome<R> {
@@ -552,11 +553,12 @@ impl<R: Eq + Hash> Transcriptome<R> {
             trxname_to_gene: HashMap::new(),
             trxname_to_transcript: HashMap::new(),
             trxname_by_location: AnnotMap::new(),
+            trxname_by_index: Vec::new(),
         }
     }
 
     pub fn trxnames(&self) -> impl Iterator<Item = &R> {
-        self.trxname_to_transcript.keys()
+        self.trxname_by_index.iter()
     }
 
     pub fn find_at_loc<'a: 'c, 'b: 'c, 'c, L: Loc<RefID = R>>(
@@ -571,7 +573,9 @@ impl<R: Eq + Hash> Transcriptome<R> {
     }
 
     pub fn transcripts(&self) -> impl Iterator<Item = &Transcript<R>> {
-        self.trxname_to_transcript.values()
+        self.trxname_by_index
+            .iter()
+            .map(|t| self.trxname_to_transcript.get(t).unwrap())
     }
 }
 
@@ -597,6 +601,8 @@ where
 
         self.trxname_to_transcript
             .insert(trxname.clone(), transcript);
+
+        self.trxname_by_index.push(trxname.clone());
 
         Ok(trxname)
     }
